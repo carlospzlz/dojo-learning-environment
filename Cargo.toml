@@ -6,5 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+generic-array = "0.14.7"
 image = "0.24.6"
+md-5 = "0.10.5"
 tim2 = "0.3.1"
