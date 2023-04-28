@@ -1,10 +1,12 @@
 //mod basic_reader;
 //mod cdrom;
-mod bios;
+//mod bios;
+mod system;
 
 //use basic_reader::read;
 //use cdrom::CdRom;
-use bios::Bios;
+//use bios::Bios;
+use system::System;
 
 fn main() {
     //// Read to memory
@@ -27,9 +29,16 @@ fn main() {
     //cdrom.write_tim_images();
 
     // Read BIOS
-    let bios = Bios::from_file("bios/scph1001.bin").expect("Something went wrong!");
+    //let bios = Bios::from_file("bios/scph1001.bin").expect("Something went wrong!");
 
     // Get hash
-    let hash = bios.get_hash();
-    println!("BIOS hash: {:x}", hash);
+    //let hash = bios.get_hash();
+    //println!("BIOS hash: {:x}", hash);
+
+    // System
+    let mut system = System::new();
+    system.boot_system();
+    while true{
+        system.execute();
+    }
 }
