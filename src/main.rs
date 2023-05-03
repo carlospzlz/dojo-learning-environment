@@ -38,7 +38,7 @@ fn main() {
     // System
     let mut system = System::new();
     system.boot_system();
-    while true{
+    loop {
         system.execute();
     }
 }
