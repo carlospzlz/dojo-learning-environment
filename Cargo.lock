@@ -527,6 +527,7 @@ dependencies = [
  "generic-array",
  "image",
  "md-5",
+ "num-traits",
  "tim2",
 ]
 

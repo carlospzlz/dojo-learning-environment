@@ -2,12 +2,15 @@ use crate::system::bios::BIOS_BASE;
 use crate::system::bios::BIOS_MASK;
 use crate::system::bios::BIOS_SIZE;
 use crate::system::bus::Bus;
+use crate::system::cpu_types::Instruction;
+use crate::system::cpu_types::InstructionFunct;
+use crate::system::cpu_types::InstructionOp;
 
 type PhysicalMemoryAddress = u32; // R3000A is 32 bits CPU
 
 const PHYSICAL_MEMORY_ADDRESS_MASK: PhysicalMemoryAddress = 0x1FFFFFFF;
 const RAM_MASK: PhysicalMemoryAddress = (RAM_SIZE as u32) - 1; // Mask of relevant bits
-const RAM_MIRROR_END: u32 = 0x80000000; // 2^31 - ~2GB
+const RAM_MIRROR_END: u32 = 0x800000; // 8 * 2^20 - 8MB
 const RAM_SIZE: usize = 0x200000; // Size of the RAM (2 MB)
 const RESET_VECTOR: PhysicalMemoryAddress = 0xBFC00000;
 
@@ -17,11 +20,7 @@ pub struct CPU {
 
 struct State {
     registers: Registers,
-    next_instruction: Instruction,
-}
-
-struct Instruction {
-    bits: u32,
+    instruction: Instruction,
 }
 
 struct Registers {
@@ -36,10 +35,9 @@ impl CPU {
     }
 
     pub fn execute(&mut self, bus: &mut Bus) -> Result<(), String> {
-        println!("CPU::Execute");
+        println!("CPU::Execute ---");
         self.fetch_instruction(&bus);
-        self.state.registers.npc +=
-            std::mem::size_of::<PhysicalMemoryAddress>() as PhysicalMemoryAddress;
+        self.execute_instruction();
         Ok(())
     }
 
@@ -56,14 +54,16 @@ impl CPU {
             // 0x06: KSEG2
             // 0x07: KSEG2
             0x00 | 0x04 => {
-                self.state.next_instruction.bits = self.do_instruction_read(address, &bus).unwrap();
+                self.state.instruction.bits = self.do_instruction_read(address, &bus).unwrap();
             }
             0x05 => {
-                self.state.next_instruction.bits = self.do_instruction_read(address, &bus).unwrap();
+                self.state.instruction.bits = self.do_instruction_read(address, &bus).unwrap();
             }
             _ => panic!("Address out of bounds: {:x}", address),
         };
-        println!("Address tag: {:x}", address);
+        println!("Address tag: {:x}", tag);
+        self.state.registers.npc +=
+            std::mem::size_of::<PhysicalMemoryAddress>() as PhysicalMemoryAddress;
         Ok(())
     }
 
@@ -76,17 +76,43 @@ impl CPU {
 
         // RAM
         if address < RAM_MIRROR_END {
+            println!("Address: {:x} (RAM)", address);
             let address = address & RAM_MASK;
+            debug_assert!(false);
             return Ok(bus.ram[address as usize] as u32);
         }
 
         // Mapped BIOS
         if address >= BIOS_BASE && address < (BIOS_BASE + BIOS_SIZE as u32) {
-            let address = (address - BIOS_BASE) & BIOS_MASK;
-            return Ok(bus.bios[address as usize] as u32);
+            println!("Address: {:x} (BIOS)", address);
+            let address = ((address - BIOS_BASE) & BIOS_MASK) as usize;
+            let instruction = bus
+                .bios
+                .get(address..address + 4)
+                .map(|slice| u32::from_be_bytes([slice[0], slice[1], slice[2], slice[3]]))
+                .unwrap();
+            return Ok(instruction);
         }
 
         Err(format!("Can't read instruction: {}", address))
+    }
+
+    fn execute_instruction(&mut self) -> Result<(), String> {
+        let instruction = &self.state.instruction;
+        println!("{:?}", instruction.get_op_code());
+        match instruction.get_op_code() {
+            InstructionOp::FUNCT => {
+                println!("FUNCT");
+            }
+            InstructionOp::B => {
+                println!("B");
+            }
+            InstructionOp::J => {
+                println!("J");
+            }
+            _ => println!("TODO!"),
+        }
+        Ok(())
     }
 }
 
@@ -94,7 +120,7 @@ impl State {
     fn new() -> Self {
         Self {
             registers: Registers::new(),
-            next_instruction: Instruction::new(),
+            instruction: Instruction::new(),
         }
     }
 }
@@ -102,11 +128,5 @@ impl State {
 impl Registers {
     fn new() -> Self {
         Self { npc: RESET_VECTOR }
-    }
-}
-
-impl Instruction {
-    fn new() -> Self {
-        Self { bits: 0x0 }
     }
 }

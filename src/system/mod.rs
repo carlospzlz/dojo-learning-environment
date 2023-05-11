@@ -1,6 +1,7 @@
 mod bios;
 mod bus;
 mod cpu;
+mod cpu_types;
 
 use bios::Bios;
 use bus::Bus;
