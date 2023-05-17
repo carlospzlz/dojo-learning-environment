@@ -1,3 +1,7 @@
+use std::result::Result;
+
+const RESET_VECTOR: u32 = 0xBFC00000;
+
 // R3000A is based on the MIPS III instruction set architecture
 #[derive(Debug)]
 pub enum InstructionOp {
@@ -86,11 +90,12 @@ impl From<u8> for InstructionOp {
             57 => InstructionOp::SWC1,
             58 => InstructionOp::SWC2,
             59 => InstructionOp::SWC3,
-            _ => panic!("Unknown Op Code {}", value),
+            _ => panic!("Unknown Op Code: {}", value),
         }
     }
 }
 
+#[derive(Debug)]
 pub enum InstructionFunct {
     SLL = 0,
     SRL = 2,
@@ -101,7 +106,7 @@ pub enum InstructionFunct {
     JR = 8,
     JALR = 9,
     SYSCALL = 12,
-    BREAK_ = 13,
+    BREAK = 13,
     MFHI = 16,
     MTHI = 17,
     MFLO = 18,
@@ -114,12 +119,48 @@ pub enum InstructionFunct {
     ADDU = 33,
     SUB = 34,
     SUBU = 35,
-    AND_ = 36,
-    OR_ = 37,
-    XOR_ = 38,
+    AND = 36,
+    OR = 37,
+    XOR = 38,
     NOR = 39,
     SLT = 42,
     SLTU = 43,
+}
+
+impl From<u8> for InstructionFunct {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => InstructionFunct::SLL,
+            2 => InstructionFunct::SRL,
+            3 => InstructionFunct::SRA,
+            4 => InstructionFunct::SLLV,
+            6 => InstructionFunct::SRLV,
+            7 => InstructionFunct::SRAV,
+            8 => InstructionFunct::JR,
+            9 => InstructionFunct::JALR,
+            12 => InstructionFunct::SYSCALL,
+            13 => InstructionFunct::BREAK,
+            16 => InstructionFunct::MFHI,
+            17 => InstructionFunct::MTHI,
+            18 => InstructionFunct::MFLO,
+            19 => InstructionFunct::MTLO,
+            24 => InstructionFunct::MULT,
+            25 => InstructionFunct::MULTU,
+            26 => InstructionFunct::DIV,
+            27 => InstructionFunct::DIVU,
+            32 => InstructionFunct::ADD,
+            33 => InstructionFunct::ADDU,
+            34 => InstructionFunct::SUB,
+            35 => InstructionFunct::SUBU,
+            36 => InstructionFunct::AND,
+            37 => InstructionFunct::OR,
+            38 => InstructionFunct::XOR,
+            39 => InstructionFunct::NOR,
+            42 => InstructionFunct::SLT,
+            43 => InstructionFunct::SLTU,
+            _ => panic!("Unknown Instruction Funct: {}", value),
+        }
+    }
 }
 
 pub struct Instruction {
@@ -133,5 +174,166 @@ impl Instruction {
 
     pub fn get_op_code(&self) -> InstructionOp {
         return ((self.bits >> 26) as u8).try_into().unwrap();
+    }
+
+    pub fn get_rs(&self) -> u8 {
+        ((self.bits >> 21) & 0x1F).try_into().unwrap()
+    }
+
+    pub fn get_base(&self) -> u8 {
+        ((self.bits >> 21) & 0x1F).try_into().unwrap()
+    }
+
+    pub fn get_rt(&self) -> u8 {
+        ((self.bits >> 16) & 0x1F).try_into().unwrap()
+    }
+
+    pub fn get_rd(&self) -> u8 {
+        ((self.bits >> 11) & 0x1F).try_into().unwrap()
+    }
+
+    pub fn get_shamt(&self) -> u8 {
+        ((self.bits >> 6) & 0x1F).try_into().unwrap()
+    }
+
+    pub fn get_immediate(&self) -> u16 {
+        (self.bits & 0xFFFF).try_into().unwrap()
+    }
+
+    pub fn get_offset(&self) -> u16 {
+        (self.bits & 0xFFFF).try_into().unwrap()
+    }
+
+    pub fn get_funct(&self) -> InstructionFunct {
+        return ((self.bits & 0x3F) as u8).try_into().unwrap();
+    }
+}
+
+impl ToString for Instruction {
+    fn to_string(&self) -> String {
+        format!(
+            "{:04b} {:04b} {:04b} {:04b} {:04b} {:04b} {:04b} {:04b}",
+            (self.bits >> 28) & 0xF,
+            (self.bits >> 24) & 0xF,
+            (self.bits >> 20) & 0xF,
+            (self.bits >> 16) & 0xF,
+            (self.bits >> 12) & 0xF,
+            (self.bits >> 8) & 0xF,
+            (self.bits >> 4) & 0xF,
+            (self.bits >> 0) & 0xF
+        )
+    }
+}
+
+pub struct Registers {
+    zero: u32, // r0
+    at: u32,   // r1
+    v0: u32,   // r2
+    v1: u32,   // r3
+    a0: u32,   // r4
+    a1: u32,   // r5
+    a2: u32,   // r6
+    a3: u32,   // r7
+    t0: u32,   // r8
+    t1: u32,   // r9
+    t2: u32,   // r10
+    t3: u32,   // r11
+    t4: u32,   // r12
+    t5: u32,   // r13
+    t6: u32,   // r14
+    t7: u32,   // r15
+    s0: u32,   // r16
+    s1: u32,   // r17
+    s2: u32,   // r18
+    s3: u32,   // r19
+    s4: u32,   // r20
+    s5: u32,   // r21
+    s6: u32,   // r22
+    s7: u32,   // r23
+    t8: u32,   // r24
+    t9: u32,   // r25
+    k0: u32,   // r26
+    k1: u32,   // r27
+    gp: u32,   // r28
+    sp: u32,   // r29
+    fp: u32,   // r30
+    ra: u32,   // r31
+
+    // not accessible to instructions
+    hi: u32,      // This holds the high 32 bits of the 64-bit result
+    lo: u32,      // This holds the low 32 bits of the 64-bit result
+    pub pc: u32, // At execution time: the address of the next instruction to execute (already fetched)
+    pub npc: u32, // At execution time: the address of the next instruction to fetch
+}
+
+impl Registers {
+    pub fn new() -> Self {
+        Self {
+            zero: 0, // 0
+            at: 0,   // 1
+            v0: 0,
+            v1: 0,
+            a0: 0,
+            a1: 0,
+            a2: 0,
+            a3: 0,
+            t0: 0, // 8
+            t1: 0,
+            t2: 0,
+            t3: 0,
+            t4: 0, // 12
+            t5: 0,
+            t6: 0,
+            t7: 0,
+            s0: 0, // 16
+            s1: 0,
+            s2: 0,
+            s3: 0,
+            s4: 0, // 20
+            s5: 0,
+            s6: 0,
+            s7: 0,
+            t8: 0,
+            t9: 0,
+            k0: 0,
+            k1: 0,
+            gp: 0,
+            sp: 0,
+            fp: 0,
+            ra: 0,
+
+            hi: 0,
+            lo: 0,
+            pc: RESET_VECTOR,
+            npc: RESET_VECTOR + 4,
+        }
+    }
+
+    pub fn read_register(&self, index: u8) -> Result<u32, String> {
+        match index {
+            0 => Ok(self.zero),
+            8 => Ok(self.t0),
+            12 => Ok(self.t4),
+            16 => Ok(self.s0),
+            20 => Ok(self.s4),
+            24 => Ok(self.t8),
+            _ => Err(format!("Read Error: Index {}", index)),
+        }
+    }
+
+    pub fn write_register(&mut self, index: u8, value: u32) -> Result<(), String> {
+        match index {
+            0 => self.zero = value,
+            _ => return Err(format!("Write Error: Index {}", index)),
+        }
+        Ok(())
+    }
+
+    pub fn write_register_upper(&mut self, index: u8, value: u16) -> Result<(), String> {
+        match index {
+            0 => self.zero = value as u32,
+            _ => return Err(format!("Write Error: Index {}", index)),
+        }
+        Ok(())
     }
 }
