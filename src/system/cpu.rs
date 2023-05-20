@@ -2,6 +2,8 @@ use crate::system::bios::BIOS_BASE;
 use crate::system::bios::BIOS_MASK;
 use crate::system::bios::BIOS_SIZE;
 use crate::system::bus::Bus;
+use crate::system::cpu_types::Cop0Instruction;
+use crate::system::cpu_types::CopCommonInstruction;
 use crate::system::cpu_types::Instruction;
 use crate::system::cpu_types::InstructionFunct;
 use crate::system::cpu_types::InstructionOp;
@@ -37,6 +39,7 @@ impl CPU {
         );
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
+        println!("----");
         Ok(())
     }
 
@@ -90,11 +93,10 @@ impl CPU {
             // Funny enough, if you brutely read a u32 in C++ on the host
             // (which usually is little endian), bytes will be arranged like
             // [3, 2, 1, 0] and the instruction will be formed correctly.
-            let instruction = bus
-                .bios
-                .get(address..address + 4)
-                .map(|slice| u32::from_be_bytes([slice[3], slice[2], slice[1], slice[0]]))
-                .unwrap();
+            let instruction: u32 = ((bus.bios[address + 3] as u32) << 24)
+                | ((bus.bios[address + 2] as u32) << 16)
+                | ((bus.bios[address + 1] as u32) << 8)
+                | ((bus.bios[address + 0] as u32) << 0);
             return Ok(instruction);
         }
 
@@ -111,18 +113,32 @@ impl CPU {
         );
         match instruction.get_op_code() {
             InstructionOp::FUNCT => {
-                println!("{:?}", instruction.get_funct());
+                println!("FUNCT: {:?}", instruction.get_funct());
                 match instruction.get_funct() {
                     InstructionFunct::SLL => self.execute_sll(),
+                    InstructionFunct::OR => self.execute_or(),
                     _ => todo!(),
                 }
             }
             InstructionOp::ADDI => self.execute_addi(),
             InstructionOp::ADDIU => self.execute_addiu(),
             InstructionOp::BEQ => self.execute_beq(),
+            InstructionOp::COP0 => self.execute_cop0(),
             InstructionOp::LUI => self.execute_lui(),
+            InstructionOp::J => self.execute_j(),
             InstructionOp::ORI => self.execute_ori(),
             InstructionOp::SW => self.execute_sw(bus),
+
+            // No-Ops
+            InstructionOp::COP1 => {}
+            InstructionOp::COP3 => {}
+            InstructionOp::LWC0 => {}
+            InstructionOp::LWC1 => {}
+            InstructionOp::LWC3 => {}
+            InstructionOp::SWC0 => {}
+            InstructionOp::SWC1 => {}
+            InstructionOp::SWC3 => {}
+
             _ => todo!(),
         };
         Ok(())
@@ -164,12 +180,33 @@ impl CPU {
         }
     }
 
+    fn execute_j(&mut self) -> () {
+        // J target
+        let target = self.state.instruction.get_target();
+        let address = (self.state.registers.pc & 0xF0000000) | (target << 2);
+        println!("[target={}]", target);
+        self.state.registers.pc = address;
+        self.state.registers.npc = address + 4;
+    }
+
     fn execute_lui(&mut self) -> () {
         // LUI rs, immediate
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
         println!("[rs={}, immediate={}]", rs, immediate);
         self.state.registers.write_register_upper(rs, immediate);
+    }
+
+    fn execute_or(&mut self) -> () {
+        // OR rd, rt, rs
+        let rd = self.state.instruction.get_rd();
+        let rt = self.state.instruction.get_rt();
+        let rs = self.state.instruction.get_rs();
+        println!("[rd={}, rt={}, rs={}]", rd, rt, rs);
+        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let result = rt_value | rs_value;
+        self.state.registers.write_register(rd, result);
     }
 
     fn execute_ori(&mut self) -> () {
@@ -199,7 +236,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
-        println!("[rt={}, offset={}", rt, offset);
+        println!("[rt={}, offset={}]", rt, offset);
         let address = ((base as i32) + (offset as i32)) as usize;
         let rs_value = self.state.registers.read_register(rt).unwrap();
         // Little endian
@@ -207,6 +244,27 @@ impl CPU {
         bus.ram[address + 1] = ((rs_value >> 16) & 0xFF) as u8;
         bus.ram[address + 2] = ((rs_value >> 8) & 0xFF) as u8;
         bus.ram[address + 3] = ((rs_value >> 0) & 0xFF) as u8;
+    }
+
+    // Coprocessor Instructions
+
+    fn execute_cop0(&mut self) -> () {
+        if self.state.instruction.is_cop_common_instruction() {
+            self.execute_cop_common_instruction()
+        } else {
+            match self.state.instruction.get_cop0_op() {
+                _ => todo!(),
+            }
+        }
+    }
+
+    fn execute_cop_common_instruction(&mut self) -> () {
+        // MTCN rt, rd
+        let cop_number = self.state.instruction.get_cop_number();
+        let cop_op = self.state.instruction.get_cop_common_op();
+        println!("COP{}: Common Op: {:?}", cop_number, cop_op);
+        let rt = self.state.instruction.get_rt();
+        let rt_value = self.state.registers.read_register(rt).unwrap();
     }
 }
 

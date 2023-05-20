@@ -47,6 +47,48 @@ pub enum InstructionOp {
     SWC3 = 59,
 }
 
+#[derive(Debug)]
+pub enum CopCommonInstruction {
+    MFCN = 0b0000, // Move From Coprocessor N
+    CFCN = 0b0010, // Coprocessor Register to General Purpose Register Move
+    MTCN = 0b0100, // Move To Coprocessor N
+    CTCN = 0b0110, // Coprocessor To Coprocessor Register Transfer
+}
+
+impl From<u8> for CopCommonInstruction {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => CopCommonInstruction::MFCN,
+            2 => CopCommonInstruction::CFCN,
+            4 => CopCommonInstruction::MTCN,
+            6 => CopCommonInstruction::CTCN,
+            _ => panic!("Unknown Cop Common Instruction: {}", value),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Cop0Instruction {
+    TLBR = 0x01,  // Translation Lookaside Buffer Read
+    TLBWI = 0x02, // Translation Lookaside Buffer Write Indexed
+    TLBW = 0x04,  // Translation Lookaside Buffer Write
+    TLBP = 0x08,  // Translation Lookaside Buffer Probe
+    RFE = 0x10,   // Return From Exception
+}
+
+impl From<u8> for Cop0Instruction {
+    fn from(value: u8) -> Self {
+        match value {
+            1 => Cop0Instruction::TLBR,
+            2 => Cop0Instruction::TLBWI,
+            4 => Cop0Instruction::TLBW,
+            8 => Cop0Instruction::TLBP,
+            16 => Cop0Instruction::RFE,
+            _ => panic!("Unknown Cop0 Instruction: {}", value),
+        }
+    }
+}
+
 impl From<u8> for InstructionOp {
     fn from(value: u8) -> Self {
         match value {
@@ -163,6 +205,53 @@ impl From<u8> for InstructionFunct {
     }
 }
 
+// Opcode/Parameter Instruction Encoding
+// ============================================================================
+//  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
+//   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
+//  -------+------+------+------+------+--------+------------
+//  000000 | N/A  | rt   | rd   | imm5 | 0000xx | shift-imm
+//  000000 | rs   | rt   | rd   | N/A  | 0001xx | shift-reg
+//  000000 | rs   | N/A  | N/A  | N/A  | 001000 | jr
+//  000000 | rs   | N/A  | rd   | N/A  | 001001 | jalr
+//  000000 | <-----comment20bit------> | 00110x | sys/brk
+//  000000 | N/A  | N/A  | rd   | N/A  | 0100x0 | mfhi/mflo
+//  000000 | rs   | N/A  | N/A  | N/A  | 0100x1 | mthi/mtlo
+//  000000 | rs   | rt   | N/A  | N/A  | 0110xx | mul/div
+//  000000 | rs   | rt   | rd   | N/A  | 10xxxx | alu-reg
+//  000001 | rs   | 00000| <--immediate16bit--> | bltz
+//  000001 | rs   | 00001| <--immediate16bit--> | bgez
+//  000001 | rs   | 10000| <--immediate16bit--> | bltzal
+//  000001 | rs   | 10001| <--immediate16bit--> | bgezal
+//  00001x | <---------immediate26bit---------> | j/jal
+//  00010x | rs   | rt   | <--immediate16bit--> | beq/bne
+//  00011x | rs   | N/A  | <--immediate16bit--> | blez/bgtz
+//  001xxx | rs   | rt   | <--immediate16bit--> | alu-imm
+//  001111 | N/A  | rt   | <--immediate16bit--> | lui-imm
+//  100xxx | rs   | rt   | <--immediate16bit--> | load rt,[rs+imm]
+//  101xxx | rs   | rt   | <--immediate16bit--> | store rt,[rs+imm]
+//  x1xxxx | <------coprocessor specific------> | coprocessor (see below)
+
+// Coprocessor Opcode/Parameter Instruction Encoding
+// ============================================================================
+//  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
+//   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
+//  -------+------+------+------+------+--------+------------
+//  0100nn |0|0000| rt   | rd   | N/A  | 000000 | MFCn rt,rd_dat  ;rt = dat
+//  0100nn |0|0010| rt   | rd   | N/A  | 000000 | CFCn rt,rd_cnt  ;rt = cnt
+//  0100nn |0|0100| rt   | rd   | N/A  | 000000 | MTCn rt,rd_dat  ;dat = rt
+//  0100nn |0|0110| rt   | rd   | N/A  | 000000 | CTCn rt,rd_cnt  ;cnt = rt
+//  0100nn |0|1000|00000 | <--immediate16bit--> | BCnF target ;jump if false
+//  0100nn |0|1000|00001 | <--immediate16bit--> | BCnT target ;jump if true
+//  0100nn |1| <--------immediate25bit--------> | COPn imm25
+//  010000 |1|0000| N/A  | N/A  | N/A  | 000001 | COP0 01h  ;=TLBR, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 000010 | COP0 02h  ;=TLBWI, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 000110 | COP0 06h  ;=TLBWR, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 001000 | COP0 08h  ;=TLBP, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 010000 | COP0 10h  ;=RFE
+//  1100nn | rs   | rt   | <--immediate16bit--> | LWCn rt_dat,[rs+imm]
+//  1110nn | rs   | rt   | <--immediate16bit--> | SWCn rt_dat,[rs+imm]
+
 pub struct Instruction {
     pub bits: u32,
 }
@@ -204,8 +293,28 @@ impl Instruction {
         (self.bits & 0xFFFF).try_into().unwrap()
     }
 
+    pub fn get_target(&self) -> u32 {
+        (self.bits & 0x3FFFFFF).try_into().unwrap()
+    }
+
     pub fn get_funct(&self) -> InstructionFunct {
-        return ((self.bits & 0x3F) as u8).try_into().unwrap();
+        ((self.bits & 0x3F) as u8).try_into().unwrap()
+    }
+
+    pub fn is_cop_common_instruction(&self) -> bool {
+        ((self.bits >> 25) & 0x1) == 0
+    }
+
+    pub fn get_cop_number(&self) -> u8 {
+        ((self.bits >> 26) & 0x3).try_into().unwrap()
+    }
+
+    pub fn get_cop_common_op(&self) -> CopCommonInstruction {
+        (((self.bits >> 21) & 0xF) as u8).try_into().unwrap()
+    }
+
+    pub fn get_cop0_op(&self) -> Cop0Instruction {
+        ((self.bits & 0x3F) as u8).try_into().unwrap()
     }
 }
 
@@ -278,7 +387,7 @@ impl Registers {
             a2: 0,
             a3: 0,
             t0: 0, // 8
-            t1: 0,
+            t1: 0, // 9
             t2: 0,
             t3: 0,
             t4: 0, // 12
@@ -313,6 +422,7 @@ impl Registers {
         match index {
             0 => Ok(self.zero),
             8 => Ok(self.t0),
+            9 => Ok(self.t1),
             12 => Ok(self.t4),
             16 => Ok(self.s0),
             20 => Ok(self.s4),
@@ -336,4 +446,15 @@ impl Registers {
         }
         Ok(())
     }
+}
+
+pub struct Cop0Registers {
+    bpc: u32,       // breakpoint on execute
+    bda: u32,       // breakpoint on data access
+    tar: u32,       // randomly memorized jump address
+    bad_vaddr: u32, // bad virtual address value
+    bdam: u32,      // data breakpoint mask
+    bpcm: u32,      // execute breakpoint mask
+    epc: u32,       // return address from trap
+    prid: u32,      // processor ID
 }
