@@ -3,6 +3,8 @@ use crate::system::bios::BIOS_MASK;
 use crate::system::bios::BIOS_SIZE;
 use crate::system::bus::Bus;
 use crate::system::cpu_types::Cop0Instruction;
+use crate::system::cpu_types::Cop0Reg;
+use crate::system::cpu_types::Cop0Registers;
 use crate::system::cpu_types::CopCommonInstruction;
 use crate::system::cpu_types::Instruction;
 use crate::system::cpu_types::InstructionFunct;
@@ -21,8 +23,9 @@ pub struct CPU {
 }
 
 struct State {
-    registers: Registers,
     instruction: Instruction,
+    registers: Registers,
+    cop0_registers: Cop0Registers,
 }
 
 impl CPU {
@@ -265,14 +268,20 @@ impl CPU {
         println!("COP{}: Common Op: {:?}", cop_number, cop_op);
         let rt = self.state.instruction.get_rt();
         let rt_value = self.state.registers.read_register(rt).unwrap();
+        let cop0_reg = Cop0Reg::from(self.state.instruction.get_rd());
+        self.state
+            .cop0_registers
+            .write_register(cop0_reg, rt_value)
+            .unwrap();
     }
 }
 
 impl State {
     fn new() -> Self {
         Self {
-            registers: Registers::new(),
             instruction: Instruction::new(),
+            registers: Registers::new(),
+            cop0_registers: Cop0Registers::new(),
         }
     }
 }

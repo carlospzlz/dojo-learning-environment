@@ -448,6 +448,40 @@ impl Registers {
     }
 }
 
+#[derive(Debug)]
+pub enum Cop0Reg {
+    BPC = 3,
+    BDA = 5,
+    JUMPDEST = 6,
+    DCIC = 7,
+    BadVaddr = 8,
+    BDAM = 9,
+    BPCM = 11,
+    SR = 12,
+    CAUSE = 13,
+    EPC = 14,
+    PRID = 15,
+}
+
+impl From<u8> for Cop0Reg {
+    fn from(value: u8) -> Self {
+        match value {
+            3 => Cop0Reg::BPC,
+            5 => Cop0Reg::BDA,
+            6 => Cop0Reg::JUMPDEST,
+            7 => Cop0Reg::DCIC,
+            8 => Cop0Reg::BadVaddr,
+            9 => Cop0Reg::BDAM,
+            11 => Cop0Reg::BPCM,
+            12 => Cop0Reg::SR,
+            13 => Cop0Reg::CAUSE,
+            14 => Cop0Reg::EPC,
+            15 => Cop0Reg::PRID,
+            _ => panic!("Unknown Cop0 Reg: {}", value),
+        }
+    }
+}
+
 pub struct Cop0Registers {
     bpc: u32,       // breakpoint on execute
     bda: u32,       // breakpoint on data access
@@ -457,4 +491,36 @@ pub struct Cop0Registers {
     bpcm: u32,      // execute breakpoint mask
     epc: u32,       // return address from trap
     prid: u32,      // processor ID
+    sr: u32,        // system status register
+}
+
+impl Cop0Registers {
+    pub fn new() -> Self {
+        Self {
+            bpc: 0,
+            bda: 0,
+            tar: 0,
+            bad_vaddr: 0,
+            bdam: 0,
+            bpcm: 0,
+            epc: 0,
+            prid: 0,
+        }
+    }
+
+    pub fn read_register(&self, reg: Cop0Reg) -> Result<u32, String> {
+        match reg {
+            Cop0Reg::BPC => Ok(self.bpc),
+            _ => Err(format!("Cop0 Register Read Error: {:?}", reg)),
+        }
+    }
+
+    pub fn write_register(&mut self, reg: Cop0Reg, value: u32) -> Result<(), String> {
+        match reg {
+            Cop0Reg::BPC => self.bpc = value,
+            Cop0Reg::SR => self.sr = value,
+            _ => return Err(format!("Cop0 Register Write Error: {:?}", reg)),
+        }
+        Ok(())
+    }
 }
