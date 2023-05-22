@@ -380,28 +380,31 @@ impl Registers {
         Self {
             zero: 0, // 0
             at: 0,   // 1
-            v0: 0,
-            v1: 0,
-            a0: 0,
-            a1: 0,
-            a2: 0,
-            a3: 0,
-            t0: 0, // 8
-            t1: 0, // 9
-            t2: 0,
-            t3: 0,
-            t4: 0, // 12
+            v0: 0,   // 2
+            v1: 0,   // 3
+            a0: 0,   // 4
+            a1: 0,   // 5
+            a2: 0,   // 6
+            a3: 0,   // 7
+
+            t0: 0,   // 8
+            t1: 0,   // 9
+            t2: 0,   // 10
+            t3: 0,   // 11
+            t4: 0,   // 12
             t5: 0,
             t6: 0,
             t7: 0,
-            s0: 0, // 16
+
+            s0: 0,   // 16
             s1: 0,
             s2: 0,
             s3: 0,
-            s4: 0, // 20
+            s4: 0,   // 20
             s5: 0,
             s6: 0,
             s7: 0,
+
             t8: 0,
             t9: 0,
             k0: 0,
@@ -421,30 +424,74 @@ impl Registers {
     pub fn read_register(&self, index: u8) -> Result<u32, String> {
         match index {
             0 => Ok(self.zero),
+            1 => Ok(self.at),
+            2 => Ok(self.v0),
+            3 => Ok(self.v1),
             8 => Ok(self.t0),
             9 => Ok(self.t1),
+            10 => Ok(self.t2),
+            11 => Ok(self.t3),
             12 => Ok(self.t4),
             16 => Ok(self.s0),
             20 => Ok(self.s4),
             24 => Ok(self.t8),
-            _ => Err(format!("Read Error: Index {}", index)),
+            _ => panic!("Read Error: Index {}", index),
         }
+    }
+
+    pub fn read_register_hi(&mut self) -> u32 {
+        self.hi
     }
 
     pub fn write_register(&mut self, index: u8, value: u32) -> Result<(), String> {
         match index {
-            0 => self.zero = value,
-            _ => return Err(format!("Write Error: Index {}", index)),
+            0 => Ok(self.zero = value),
+            1 => Ok(self.at = value),
+            2 => Ok(self.v0 = value),
+            3 => Ok(self.v1 = value),
+            4 => Ok(self.a0 = value),
+            5 => Ok(self.a1 = value),
+            6 => Ok(self.a2 = value),
+            7 => Ok(self.a3 = value),
+            8 => Ok(self.t0 = value),
+            9 => Ok(self.t1 = value),
+            _ => panic!("Write Error: Index {}", index),
         }
-        Ok(())
     }
 
     pub fn write_register_upper(&mut self, index: u8, value: u16) -> Result<(), String> {
         match index {
-            0 => self.zero = value as u32,
-            _ => return Err(format!("Write Error: Index {}", index)),
+            0 => Ok(self.zero = (value as u32) << 16),
+            1 => Ok(self.at = (value as u32) << 16),
+            2 => Ok(self.v0 = (value as u32) << 16),
+            3 => Ok(self.v1 = (value as u32) << 16),
+            4 => Ok(self.a0 = (value as u32) << 16),
+            5 => Ok(self.a1 = (value as u32) << 16),
+            6 => Ok(self.a2 = (value as u32) << 16),
+            7 => Ok(self.a3 = (value as u32) << 16),
+            8 => Ok(self.t0 = (value as u32) << 16),
+            9 => Ok(self.t1 = (value as u32) << 16),
+            _ => panic!("Write Upper Error: Index {}", index),
         }
-        Ok(())
+    }
+
+    pub fn dump(&self) -> () {
+        println!(
+            "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
+            self.zero, self.at, self.v0, self.v1, self.a0, self.a1, self.a2, self.a3
+        );
+        println!(
+            "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
+            self.t0, self.t1, self.t2, self.t3, self.t4, self.t5, self.t6, self.t7
+        );
+        println!(
+            "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
+            self.s0, self.s1, self.s2, self.s3, self.s4, self.s5, self.s6, self.s7
+        );
+        println!(
+            "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
+            self.t8, self.t9, self.k0, self.k1, self.gp, self.sp, self.fp, self.ra
+        );
     }
 }
 
@@ -483,15 +530,17 @@ impl From<u8> for Cop0Reg {
 }
 
 pub struct Cop0Registers {
-    bpc: u32,       // breakpoint on execute
-    bda: u32,       // breakpoint on data access
-    tar: u32,       // randomly memorized jump address
-    bad_vaddr: u32, // bad virtual address value
-    bdam: u32,      // data breakpoint mask
-    bpcm: u32,      // execute breakpoint mask
-    epc: u32,       // return address from trap
-    prid: u32,      // processor ID
-    sr: u32,        // system status register
+    bpc: u32,       // Breakpoint on execute
+    bda: u32,       // Breakpoint on data access
+    tar: u32,       // Randomly memorized jump address
+    bad_vaddr: u32, // Bad virtual address value
+    bdam: u32,      // Data breakpoint mask
+    bpcm: u32,      // Execute breakpoint mask
+    epc: u32,       // Return address from trap
+    prid: u32,      // Processor ID
+    sr: u32,        // System status register
+    dcic: u32,      // Data cache invalidate by index
+    cause: u32,     // Interrumption cause
 }
 
 impl Cop0Registers {
@@ -505,6 +554,9 @@ impl Cop0Registers {
             bpcm: 0,
             epc: 0,
             prid: 0,
+            sr: 0,
+            dcic: 0,
+            cause: 0,
         }
     }
 
@@ -517,7 +569,13 @@ impl Cop0Registers {
 
     pub fn write_register(&mut self, reg: Cop0Reg, value: u32) -> Result<(), String> {
         match reg {
+            Cop0Reg::BDA => self.bda = value,
+            Cop0Reg::BDAM => self.bdam = value,
             Cop0Reg::BPC => self.bpc = value,
+            Cop0Reg::BPCM => self.bpcm = value,
+            Cop0Reg::CAUSE => self.cause = value,
+            Cop0Reg::DCIC => self.dcic = value,
+            Cop0Reg::JUMPDEST => self.tar = value,
             Cop0Reg::SR => self.sr = value,
             _ => return Err(format!("Cop0 Register Write Error: {:?}", reg)),
         }
