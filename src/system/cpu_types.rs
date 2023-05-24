@@ -392,27 +392,27 @@ impl Registers {
             t2: 0,   // 10
             t3: 0,   // 11
             t4: 0,   // 12
-            t5: 0,
-            t6: 0,
-            t7: 0,
+            t5: 0,   // 13
+            t6: 0,   // 14
+            t7: 0,   // 15
 
             s0: 0,   // 16
-            s1: 0,
-            s2: 0,
-            s3: 0,
+            s1: 0,   // 17
+            s2: 0,   // 18
+            s3: 0,   // 19
             s4: 0,   // 20
-            s5: 0,
-            s6: 0,
-            s7: 0,
+            s5: 0,   // 21
+            s6: 0,   // 22
+            s7: 0,   // 23
 
-            t8: 0,
-            t9: 0,
-            k0: 0,
+            t8: 0,   // 24
+            t9: 0,   // 25
+            k0: 0,   // 26
             k1: 0,
             gp: 0,
-            sp: 0,
+            sp: 0,   // 29
             fp: 0,
-            ra: 0,
+            ra: 0,   // 31
 
             hi: 0,
             lo: 0,
@@ -427,14 +427,34 @@ impl Registers {
             1 => Ok(self.at),
             2 => Ok(self.v0),
             3 => Ok(self.v1),
+            4 => Ok(self.a0),
+            5 => Ok(self.a1),
+            6 => Ok(self.a2),
+            7 => Ok(self.a3),
             8 => Ok(self.t0),
             9 => Ok(self.t1),
             10 => Ok(self.t2),
             11 => Ok(self.t3),
             12 => Ok(self.t4),
+            13 => Ok(self.t5),
+            14 => Ok(self.t6),
+            15 => Ok(self.t7),
             16 => Ok(self.s0),
+            17 => Ok(self.s1),
+            18 => Ok(self.s2),
+            19 => Ok(self.s3),
             20 => Ok(self.s4),
+            21 => Ok(self.s5),
+            22 => Ok(self.s6),
+            23 => Ok(self.s7),
             24 => Ok(self.t8),
+            25 => Ok(self.t9),
+            26 => Ok(self.k0),
+            27 => Ok(self.k1),
+            28 => Ok(self.gp),
+            29 => Ok(self.sp),
+            30 => Ok(self.fp),
+            31 => Ok(self.ra),
             _ => panic!("Read Error: Index {}", index),
         }
     }
@@ -455,6 +475,28 @@ impl Registers {
             7 => Ok(self.a3 = value),
             8 => Ok(self.t0 = value),
             9 => Ok(self.t1 = value),
+            10 => Ok(self.t2 = value),
+            11 => Ok(self.t3 = value),
+            12 => Ok(self.t4 = value),
+            13 => Ok(self.t5 = value),
+            14 => Ok(self.t6 = value),
+            15 => Ok(self.t7 = value),
+            16 => Ok(self.s0 = value),
+            17 => Ok(self.s1 = value),
+            18 => Ok(self.s2 = value),
+            19 => Ok(self.s3 = value),
+            20 => Ok(self.s4 = value),
+            21 => Ok(self.s5 = value),
+            22 => Ok(self.s6 = value),
+            23 => Ok(self.s7 = value),
+            24 => Ok(self.t8 = value),
+            25 => Ok(self.t9 = value),
+            26 => Ok(self.k0 = value),
+            27 => Ok(self.k1 = value),
+            28 => Ok(self.gp = value),
+            29 => Ok(self.sp = value),
+            30 => Ok(self.fp = value),
+            31 => Ok(self.ra = value),
             _ => panic!("Write Error: Index {}", index),
         }
     }
@@ -471,6 +513,20 @@ impl Registers {
             7 => Ok(self.a3 = (value as u32) << 16),
             8 => Ok(self.t0 = (value as u32) << 16),
             9 => Ok(self.t1 = (value as u32) << 16),
+            10 => Ok(self.t2 = (value as u32) << 16),
+            11 => Ok(self.t3 = (value as u32) << 16),
+            12 => Ok(self.t4 = (value as u32) << 16),
+            13 => Ok(self.t5 = (value as u32) << 16),
+            14 => Ok(self.t6 = (value as u32) << 16),
+            15 => Ok(self.t7 = (value as u32) << 16),
+            16 => Ok(self.s0 = (value as u32) << 16),
+            17 => Ok(self.s1 = (value as u32) << 16),
+            18 => Ok(self.s2 = (value as u32) << 16),
+            19 => Ok(self.s3 = (value as u32) << 16),
+            20 => Ok(self.s4 = (value as u32) << 16),
+            21 => Ok(self.s5 = (value as u32) << 16),
+            22 => Ok(self.s6 = (value as u32) << 16),
+            23 => Ok(self.s7 = (value as u32) << 16),
             _ => panic!("Write Upper Error: Index {}", index),
         }
     }

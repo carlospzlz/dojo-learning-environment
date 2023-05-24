@@ -44,9 +44,9 @@ impl CPU {
         self.state.dump();
         println!();
 
-        let stdin = io::stdin();
-        let mut buffer = String::new();
-        stdin.lock().read_line(&mut buffer);
+        //let stdin = io::stdin();
+        //let mut buffer = String::new();
+        //stdin.lock().read_line(&mut buffer);
 
         Ok(())
     }
@@ -113,12 +113,12 @@ impl CPU {
 
     fn execute_instruction(&mut self, bus: &mut Bus) -> Result<(), String> {
         let instruction = &self.state.instruction;
-        println!(
-            "{:x}  {} ({:?})",
-            instruction.bits,
-            instruction.to_string(),
-            instruction.get_op_code()
-        );
+        //println!(
+        //    "{:x}  {} ({:?})",
+        //    instruction.bits,
+        //    instruction.to_string(),
+        //    instruction.get_op_code()
+        //);
         match instruction.get_op_code() {
             InstructionOp::FUNCT => {
                 //println!("FUNCT: {:?}", instruction.get_funct());
@@ -201,7 +201,11 @@ impl CPU {
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let rt_value = self.state.registers.read_register(rt).unwrap();
         if rs_value != rt_value {
-            self.state.registers.npc = self.state.registers.pc + (offset as u32);
+            let offset = offset as i16 as i32;
+            println!("{:016b} {}", offset, offset);
+            println!("{:016b} {}", offset as i16, offset as i16);
+            println!("{:032b} {}", offset as i32, offset as i32);
+            self.state.registers.npc = self.state.registers.pc + ((offset << 2) as u32);
             println!("Branch!");
         }
     }
@@ -220,7 +224,7 @@ impl CPU {
         // LUI rt, immediate
         let rt = self.state.instruction.get_rt();
         let immediate = self.state.instruction.get_immediate();
-        println!("[rt={}, immediate={}]", rt, immediate);
+        //println!("[rt={}, immediate={}]", rt, immediate);
         self.state.registers.write_register_upper(rt, immediate);
     }
 
