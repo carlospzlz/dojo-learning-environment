@@ -53,62 +53,11 @@ impl CPU {
 
     fn fetch_instruction(&mut self, bus: &Bus) -> Result<(), String> {
         let address = self.state.registers.pc;
-        let tag = address >> 29;
-        match tag {
-            // 0x00: KUSEG    0M- 512M
-            // 0x01: KUSEG  512M-1024M
-            // 0x02: KUSEG 1024M-1536M
-            // 0x03: KUSEG 1536M-2048M
-            // 0x04: KSEG  Physical Memory Cached
-            // 0x05: KSEG  Physical Memory Uncached
-            // 0x06: KSEG2
-            // 0x07: KSEG2
-            0x00 | 0x04 => {
-                self.state.instruction.bits = self.do_instruction_read(address, &bus).unwrap();
-            }
-            0x05 => {
-                self.state.instruction.bits = self.do_instruction_read(address, &bus).unwrap();
-            }
-            _ => panic!("Address out of bounds: {:x}", address),
-        };
+        let bits = bus.fetch_instruction(address).unwrap();
+        self.state.instruction.bits = bits;
         self.state.registers.pc = self.state.registers.npc;
-        self.state.registers.npc +=
-            std::mem::size_of::<PhysicalMemoryAddress>() as PhysicalMemoryAddress;
+        self.state.registers.npc += std::mem::size_of::<u32>() as u32;
         Ok(())
-    }
-
-    fn do_instruction_read(
-        &mut self,
-        address: PhysicalMemoryAddress,
-        bus: &Bus,
-    ) -> Result<u32, String> {
-        let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
-
-        // RAM
-        if address < RAM_MIRROR_END {
-            //println!("Address: {:x} (RAM)", address);
-            let address = address & RAM_MASK;
-            debug_assert!(false);
-            return Ok(bus.ram[address as usize] as u32);
-        }
-
-        // Mapped BIOS
-        if address >= BIOS_BASE && address < (BIOS_BASE + BIOS_SIZE as u32) {
-            //println!("Address: {:x} (BIOS)", address);
-            let address = ((address - BIOS_BASE) & BIOS_MASK) as usize;
-            // R3000A is little endian! So the most significant bytes are
-            // stored in lower memory addresses.
-            // Funny enough, if you brutely read a u32 in C++ on the host
-            // (which usually is little endian), bytes will be arranged like
-            // [3, 2, 1, 0] and the instruction will be formed correctly.
-            let instruction: u32 = ((bus.bios[address + 3] as u32) << 24)
-                | ((bus.bios[address + 2] as u32) << 16)
-                | ((bus.bios[address + 1] as u32) << 8)
-                | ((bus.bios[address + 0] as u32) << 0);
-            return Ok(instruction);
-        }
-
-        Err(format!("Can't read instruction: {}", address))
     }
 
     fn execute_instruction(&mut self, bus: &mut Bus) -> Result<(), String> {
