@@ -201,11 +201,11 @@ impl CPU {
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let rt_value = self.state.registers.read_register(rt).unwrap();
         if rs_value != rt_value {
-            let offset = offset as i16 as i32;
-            println!("{:016b} {}", offset, offset);
-            println!("{:016b} {}", offset as i16, offset as i16);
-            println!("{:032b} {}", offset as i32, offset as i32);
-            self.state.registers.npc = self.state.registers.pc + ((offset << 2) as u32);
+            // Sign extend to i32
+            let offset = (offset as i16 as i32) << 2;
+            // Add, PC interpreted as i32
+            let npc = self.state.registers.pc as i32 + offset;
+            self.state.registers.npc = npc as u32;
             println!("Branch!");
         }
     }
