@@ -1,3 +1,5 @@
+use log::{debug, error, info, warn};
+
 //mod basic_reader;
 //mod cdrom;
 //mod bios;
@@ -9,6 +11,8 @@ mod system;
 use system::System;
 
 fn main() {
+    env_logger::init();
+
     //// Read to memory
     //let cdrom = CdRom::from_file("roms/tekken.bin").expect("Failed to read");
 
@@ -38,7 +42,7 @@ fn main() {
     // System
     let mut system = System::new();
     system.boot_system();
-    loop {
+    for i in 0..25000 {
         system.execute();
     }
 }

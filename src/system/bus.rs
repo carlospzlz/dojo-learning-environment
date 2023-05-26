@@ -1,4 +1,5 @@
 use crate::system::bios::BIOS_SIZE;
+use log::{debug, error, info, warn};
 
 const PHYSICAL_MEMORY_ADDRESS_MASK: u32 = 0x1FFFFFFF;
 
@@ -27,14 +28,14 @@ const PHYSICAL_MEMORY_ADDRESS_MASK: u32 = 0x1FFFFFFF;
 //
 // From https://psx-spx.consoledev.net/memorymap/
 
-mod MemoryMap {
+mod memory_map {
     //const RAM_BASE = 0x00000000,
     pub const RAM_2MB_SIZE: u32 = 0x200000; // 2048 KB
     pub const RAM_2MB_MASK: u32 = RAM_2MB_SIZE - 1;
     //const RAM_8MB_SIZE = 0x800000,
     //const RAM_8MB_MASK = RAM_8MB_SIZE - 1,
     pub const RAM_MIRROR_END: u32 = 0x800000;
-    //const EXP1_BASE = 0x1F000000,
+    pub const EXP1_BASE: u32 = 0x1F000000;
     //const EXP1_SIZE = 0x800000,
     //const EXP1_MASK = EXP1_SIZE - 1,
     //const MEMCTRL_BASE = 0x1F801000,
@@ -82,15 +83,15 @@ mod MemoryMap {
 }
 
 pub struct Bus {
-    pub bios: [u8; MemoryMap::BIOS_SIZE as usize],
-    pub ram: [u8; MemoryMap::RAM_2MB_SIZE as usize],
+    pub bios: [u8; memory_map::BIOS_SIZE as usize],
+    pub ram: [u8; memory_map::RAM_2MB_SIZE as usize],
 }
 
 impl Bus {
     pub fn new() -> Self {
         Self {
-            bios: [0; MemoryMap::BIOS_SIZE as usize],
-            ram: [0; MemoryMap::RAM_2MB_SIZE as usize],
+            bios: [0; memory_map::BIOS_SIZE as usize],
+            ram: [0; memory_map::RAM_2MB_SIZE as usize],
         }
     }
 
@@ -117,19 +118,19 @@ impl Bus {
         let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
 
         // RAM
-        if address < MemoryMap::RAM_MIRROR_END {
+        if address < memory_map::RAM_MIRROR_END {
             //println!("Address: {:x} (RAM)", address);
-            let address = address & MemoryMap::RAM_2MB_MASK;
+            let address = address & memory_map::RAM_2MB_MASK;
             debug_assert!(false);
             return Ok(self.ram[address as usize] as u32);
         }
 
         // Mapped BIOS
-        if address >= (MemoryMap::BIOS_BASE)
-            && address < (MemoryMap::BIOS_BASE + MemoryMap::BIOS_SIZE)
+        if address >= (memory_map::BIOS_BASE)
+            && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
         {
             //println!("Address: {:x} (BIOS)", address);
-            let address = ((address - MemoryMap::BIOS_BASE) & MemoryMap::BIOS_MASK) as usize;
+            let address = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
             // R3000A is little endian! So the most significant bytes are
             // stored in lower memory addresses.
             // Funny enough, if you brutely read a u32 in C++ on the host
@@ -145,7 +146,95 @@ impl Bus {
         panic!("Can't read instruction: {}", address)
     }
 
-    pub fn read_memory(address: u32) -> Result<u32, String> {
+    pub fn read_memory_word(&self, address: u32) -> Result<u32, String> {
+        let tag = address >> 29;
+        match tag {
+            // 0x00: KUSEG    0M- 512M
+            // 0x01: KUSEG  512M-1024M
+            // 0x02: KUSEG 1024M-1536M
+            // 0x03: KUSEG 1536M-2048M
+            // 0x04: KSEG  Physical Memory Cached
+            // 0x05: KSEG  Physical Memory Uncached
+            // 0x06: KSEG2
+            // 0x07: KSEG2
+            0x00 | 0x04 => {
+                warn!("Read cached memory");
+                Ok(0)
+            }
+            0x01 | 0x02 | 0x03 => panic!("Exception: Reading above 512 MB"),
+            0x06 | 0x07 => todo!("Weird case"),
+            0x05 => self.do_memory_word_read(address),
+            _ => panic!("Address out of bounds: {:x}", address),
+        }
+    }
+
+    fn do_memory_word_read(&self, address: u32) -> Result<u32, String> {
+        let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
+
+        if address < memory_map::RAM_MIRROR_END {
+            debug!("Reading memory: RAM_MIRROR_END");
+        } else if address >= memory_map::BIOS_BASE
+            && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
+        {
+            debug!("Reading memory: BIOS");
+        } else if address < memory_map::EXP1_BASE {
+            debug!("Reading memory: BIOS");
+        } else {
+            todo!("Reading memory");
+        }
+
+        ////// RAM
+        //if address < memory_map::RAM_MIRROR_END {
+        //    //println!("Address: {:x} (RAM)", address);
+        //    let address = address & memory_map::RAM_2MB_MASK;
+        //    debug_assert!(false);
+        //    return Ok(self.ram[address as usize] as u32);
+        //}
+
+        //// Mapped BIOS
+        //if address >= (memory_map::BIOS_BASE)
+        //    && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
+        //{
+        //    //println!("Address: {:x} (BIOS)", address);
+        //    let address = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
+        //    // R3000A is little endian! So the most significant bytes are
+        //    // stored in lower memory addresses.
+        //    // Funny enough, if you brutely read a u32 in C++ on the host
+        //    // (which usually is little endian), bytes will be arranged like
+        //    // [3, 2, 1, 0] and the instruction will be formed correctly.
+        //    let instruction: u32 = ((self.bios[address + 3] as u32) << 24)
+        //        | ((self.bios[address + 2] as u32) << 16)
+        //        | ((self.bios[address + 1] as u32) << 8)
+        //        | ((self.bios[address + 0] as u32) << 0);
+        //    return Ok(instruction);
+        //}
+
+        panic!("Can't read memory: {}", address)
+    }
+
+    pub fn write_memory_half_word(&self, address: u32, value: u16) -> Result<u32, String> {
+        let tag = address >> 29;
+        match tag {
+            // 0x00: KUSEG    0M- 512M
+            // 0x01: KUSEG  512M-1024M
+            // 0x02: KUSEG 1024M-1536M
+            // 0x03: KUSEG 1536M-2048M
+            // 0x04: KSEG  Physical Memory Cached
+            // 0x05: KSEG  Physical Memory Uncached
+            // 0x06: KSEG2
+            // 0x07: KSEG2
+            0x00 | 0x04 => {
+                warn!("Read cached memory");
+                Ok(0)
+            }
+            0x01 | 0x02 | 0x03 => panic!("Exception: Reading above 512 MB"),
+            0x06 | 0x07 => todo!("Weird case"),
+            0x05 => self.do_memory_half_word_read(address, value),
+            _ => panic!("Address out of bounds: {:x}", address),
+        }
+    }
+
+    fn do_memory_half_word_read(&self, address: u32, value: u16) -> Result<u32, String> {
         Ok(0)
     }
 }
