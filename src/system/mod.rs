@@ -50,7 +50,7 @@ impl System {
         Ok(())
     }
 
-    fn initialize(&self) -> Result<(), String> {
+    fn initialize(&mut self) -> Result<(), String> {
         self.bus.initialize();
         //self.cpu.iniatialize(self.bus);
         //self.gpu.initialize();

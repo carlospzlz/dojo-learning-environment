@@ -30,7 +30,6 @@ struct State {
     registers: Registers,
     cop0_registers: Cop0Registers,
     frame_done: bool,
-
     // Caution - Load Delay
     //
     // The loaded data is NOT available to the next opcode, ie. the target
@@ -60,6 +59,7 @@ impl CPU {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
         self.state.dump();
+        bus.dump_mem_ctrl_registers();
         println!();
 
         //let stdin = io::stdin();
@@ -263,8 +263,7 @@ impl CPU {
         //    | ((bus.ram[address + 1] as u32) << 8)
         //    | ((bus.ram[address + 0] as u32) << 0);
         let word = bus.read_memory_word(address);
-        //self.state.registers.write_register(rt, word);
-        // This is not working
+        self.state.registers.write_register(rt, word);
     }
 
     fn execute_mfhi(&mut self) -> () {
@@ -343,8 +342,9 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
+        let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
-        let address = ((base as i32) + sext_offset) as u32;
+        let address = base_value + (sext_offset as u32);
         let ts_value = self.state.registers.read_register(rt).unwrap();
         let half_word = (ts_value & 0x0000FFFF) as u16;
         bus.write_memory_half_word(address, half_word);
@@ -356,16 +356,15 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
+        let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
-        let address = ((base as i32) + sext_offset) as u32;
+        let address = base_value + (sext_offset as u32);
         let rt_value = self.state.registers.read_register(rt).unwrap();
-        // Little endian
-        //bus.ram[address + 0] = ((rt_value >> 24) & 0xFF) as u8;
-        //bus.ram[address + 1] = ((rt_value >> 16) & 0xFF) as u8;
-        //bus.ram[address + 2] = ((rt_value >> 8) & 0xFF) as u8;
-        //bus.ram[address + 3] = ((rt_value >> 0) & 0xFF) as u8;
-        warn!("SW wrongly implemented");
-        //bus.write_memory_word(address);
+        debug!(
+            "Base: {:x} Offset: {:x} Address: {:x}",
+            base as u32, offset, address
+        );
+        bus.write_memory_word(address, rt_value);
     }
 
     // Coprocessor Instructions

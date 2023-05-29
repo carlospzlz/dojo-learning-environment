@@ -335,83 +335,7 @@ impl ToString for Instruction {
     }
 }
 
-//pub enum Register {
-//    ZERO = 0, // r0
-//    AT,   // r1
-//    V0,   // r2
-//    V1,   // r3
-//    A0,   // r4
-//    A1,   // r5
-//    A2,   // r6
-//    A3,   // r7
-//    T0,   // r8
-//    T1,   // r9
-//    T2,   // r10
-//    T3,   // r11
-//    T4,   // r12
-//    T5,   // r13
-//    T6,   // r14
-//    T7,   // r15
-//    S0,   // r16
-//    S1,   // r17
-//    S2,   // r18
-//    S3,   // r19
-//    S4,   // r20
-//    S5,   // r21
-//    S6,   // r22
-//    S7,   // r23
-//    T8,   // r24
-//    T9,   // r25
-//    K0,   // r26
-//    K1,   // r27
-//    GP,   // r28
-//    SP,   // r29
-//    FP,   // r30
-//    RA,   // r31
-//
-//    // Not accessible to instructions
-//    HI,  // This holds the high 32 bits of the 64-bit result
-//    LO,  // This holds the low 32 bits of the 64-bit result
-//    PC,  // At execution time: the address of the next instruction to execute (already fetched)
-//    NPC, // At execution time: the address of the next instruction to fetch
-//
-//}
-
 pub struct Registers {
-    // TODO: Might be better an array, code below is pretty repetitive
-    //zero: u32, // r0
-    //at: u32,   // r1
-    //v0: u32,   // r2
-    //v1: u32,   // r3
-    //a0: u32,   // r4
-    //a1: u32,   // r5
-    //a2: u32,   // r6
-    //a3: u32,   // r7
-    //t0: u32,   // r8
-    //t1: u32,   // r9
-    //t2: u32,   // r10
-    //t3: u32,   // r11
-    //t4: u32,   // r12
-    //t5: u32,   // r13
-    //t6: u32,   // r14
-    //t7: u32,   // r15
-    //s0: u32,   // r16
-    //s1: u32,   // r17
-    //s2: u32,   // r18
-    //s3: u32,   // r19
-    //s4: u32,   // r20
-    //s5: u32,   // r21
-    //s6: u32,   // r22
-    //s7: u32,   // r23
-    //t8: u32,   // r24
-    //t9: u32,   // r25
-    //k0: u32,   // r26
-    //k1: u32,   // r27
-    //gp: u32,   // r28
-    //sp: u32,   // r29
-    //fp: u32,   // r30
-    //ra: u32,   // r31
-
     // General-Purpose Registers (GPRs):
     //
     //  Name       Alias    Common Usage
@@ -439,41 +363,6 @@ pub struct Registers {
 impl Registers {
     pub fn new() -> Self {
         Self {
-            //zero: 0, // 0
-            //at: 0,   // 1
-            //v0: 0,   // 2
-            //v1: 0,   // 3
-            //a0: 0,   // 4
-            //a1: 0,   // 5
-            //a2: 0,   // 6
-            //a3: 0,   // 7
-
-            //t0: 0, // 8
-            //t1: 0, // 9
-            //t2: 0, // 10
-            //t3: 0, // 11
-            //t4: 0, // 12
-            //t5: 0, // 13
-            //t6: 0, // 14
-            //t7: 0, // 15
-
-            //s0: 0, // 16
-            //s1: 0, // 17
-            //s2: 0, // 18
-            //s3: 0, // 19
-            //s4: 0, // 20
-            //s5: 0, // 21
-            //s6: 0, // 22
-            //s7: 0, // 23
-
-            //t8: 0, // 24
-            //t9: 0, // 25
-            //k0: 0, // 26
-            //k1: 0,
-            //gp: 0,
-            //sp: 0, // 29
-            //fp: 0,
-            //ra: 0, // 31
             gprs: [0; 32],
 
             hi: 0,
@@ -485,131 +374,26 @@ impl Registers {
 
     pub fn read_register(&self, index: u8) -> Result<u32, String> {
         Ok(self.gprs[index as usize])
-        //match index {
-        //    0 => Ok(self.zero),
-        //    1 => Ok(self.at),
-        //    2 => Ok(self.v0),
-        //    3 => Ok(self.v1),
-        //    4 => Ok(self.a0),
-        //    5 => Ok(self.a1),
-        //    6 => Ok(self.a2),
-        //    7 => Ok(self.a3),
-        //    8 => Ok(self.t0),
-        //    9 => Ok(self.t1),
-        //    10 => Ok(self.t2),
-        //    11 => Ok(self.t3),
-        //    12 => Ok(self.t4),
-        //    13 => Ok(self.t5),
-        //    14 => Ok(self.t6),
-        //    15 => Ok(self.t7),
-        //    16 => Ok(self.s0),
-        //    17 => Ok(self.s1),
-        //    18 => Ok(self.s2),
-        //    19 => Ok(self.s3),
-        //    20 => Ok(self.s4),
-        //    21 => Ok(self.s5),
-        //    22 => Ok(self.s6),
-        //    23 => Ok(self.s7),
-        //    24 => Ok(self.t8),
-        //    25 => Ok(self.t9),
-        //    26 => Ok(self.k0),
-        //    27 => Ok(self.k1),
-        //    28 => Ok(self.gp),
-        //    29 => Ok(self.sp),
-        //    30 => Ok(self.fp),
-        //    31 => Ok(self.ra),
-        //    _ => panic!("Read Error: Index {}", index),
-        //}
     }
 
-    pub fn read_register_hi(&mut self) -> u32 {
+    pub fn read_register_hi(&self) -> u32 {
         self.hi
     }
 
     pub fn write_register(&mut self, index: u8, value: u32) -> Result<(), String> {
         Ok(self.gprs[index as usize] = value)
-        //match index {
-        //    0 => Ok(self.zero = value),
-        //    1 => Ok(self.at = value),
-        //    2 => Ok(self.v0 = value),
-        //    3 => Ok(self.v1 = value),
-        //    4 => Ok(self.a0 = value),
-        //    5 => Ok(self.a1 = value),
-        //    6 => Ok(self.a2 = value),
-        //    7 => Ok(self.a3 = value),
-        //    8 => Ok(self.t0 = value),
-        //    9 => Ok(self.t1 = value),
-        //    10 => Ok(self.t2 = value),
-        //    11 => Ok(self.t3 = value),
-        //    12 => Ok(self.t4 = value),
-        //    13 => Ok(self.t5 = value),
-        //    14 => Ok(self.t6 = value),
-        //    15 => Ok(self.t7 = value),
-        //    16 => Ok(self.s0 = value),
-        //    17 => Ok(self.s1 = value),
-        //    18 => Ok(self.s2 = value),
-        //    19 => Ok(self.s3 = value),
-        //    20 => Ok(self.s4 = value),
-        //    21 => Ok(self.s5 = value),
-        //    22 => Ok(self.s6 = value),
-        //    23 => Ok(self.s7 = value),
-        //    24 => Ok(self.t8 = value),
-        //    25 => Ok(self.t9 = value),
-        //    26 => Ok(self.k0 = value),
-        //    27 => Ok(self.k1 = value),
-        //    28 => Ok(self.gp = value),
-        //    29 => Ok(self.sp = value),
-        //    30 => Ok(self.fp = value),
-        //    31 => Ok(self.ra = value),
-        //    _ => panic!("Write Error: Index {}", index),
-        //}
     }
 
     pub fn write_register_upper(&mut self, index: u8, value: u16) -> Result<(), String> {
         Ok(self.gprs[index as usize] = (value as u32) << 16)
-        //match index {
-        //    0 => Ok(self.zero = (value as u32) << 16),
-        //    1 => Ok(self.at = (value as u32) << 16),
-        //    2 => Ok(self.v0 = (value as u32) << 16),
-        //    3 => Ok(self.v1 = (value as u32) << 16),
-        //    4 => Ok(self.a0 = (value as u32) << 16),
-        //    5 => Ok(self.a1 = (value as u32) << 16),
-        //    6 => Ok(self.a2 = (value as u32) << 16),
-        //    7 => Ok(self.a3 = (value as u32) << 16),
-        //    8 => Ok(self.t0 = (value as u32) << 16),
-        //    9 => Ok(self.t1 = (value as u32) << 16),
-        //    10 => Ok(self.t2 = (value as u32) << 16),
-        //    11 => Ok(self.t3 = (value as u32) << 16),
-        //    12 => Ok(self.t4 = (value as u32) << 16),
-        //    13 => Ok(self.t5 = (value as u32) << 16),
-        //    14 => Ok(self.t6 = (value as u32) << 16),
-        //    15 => Ok(self.t7 = (value as u32) << 16),
-        //    16 => Ok(self.s0 = (value as u32) << 16),
-        //    17 => Ok(self.s1 = (value as u32) << 16),
-        //    18 => Ok(self.s2 = (value as u32) << 16),
-        //    19 => Ok(self.s3 = (value as u32) << 16),
-        //    20 => Ok(self.s4 = (value as u32) << 16),
-        //    21 => Ok(self.s5 = (value as u32) << 16),
-        //    22 => Ok(self.s6 = (value as u32) << 16),
-        //    23 => Ok(self.s7 = (value as u32) << 16),
-        //    24 => Ok(self.t8 = (value as u32) << 16),
-        //    25 => Ok(self.t9 = (value as u32) << 16),
-        //    26 => Ok(self.k0 = (value as u32) << 16),
-        //    27 => Ok(self.k1 = (value as u32) << 16),
-        //    28 => Ok(self.gp = (value as u32) << 16),
-        //    29 => Ok(self.sp = (value as u32) << 16),
-        //    30 => Ok(self.fp = (value as u32) << 16),
-        //    31 => Ok(self.ra = (value as u32) << 16),
-        //    _ => panic!("Write Upper Error: Index {}", index),
-        //}
     }
 
     pub fn dump(&self) -> () {
-        let r = self.gprs;
         // ze at v0 v1 a0 a1 a2 a3
         // t0 t1 t2 t3 t4 t5 t6 t7
         // s0 s1 s2 s3 s4 s5 s6 s7
         // t8 t9 k0 k1 gp sp fp ra
+        let r = self.gprs;
         println!(
             "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
             r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]
