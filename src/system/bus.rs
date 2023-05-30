@@ -351,7 +351,7 @@ impl Bus {
 
         if address < memory_map::RAM_MIRROR_END {
             debug!("Reading memory: RAM_MIRROR_END");
-            return self.do_ram_read(address);
+            return self.do_ram_word_read(address);
         } else if address >= memory_map::BIOS_BASE
             && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
         {
@@ -391,13 +391,13 @@ impl Bus {
         panic!("Can't read memory: {}", address)
     }
 
-    fn do_ram_read(&self, address: u32) -> u32 {
-        let address = address & memory_map::RAM_2MB_MASK;
+    fn do_ram_word_read(&self, address: u32) -> u32 {
+        let offset = address & memory_map::RAM_2MB_MASK;
         // Little endian
-        ((self.ram[(address + 3) as usize] as u32) << 24)
-            | ((self.ram[(address + 2) as usize] as u32) << 16)
-            | ((self.ram[(address + 1) as usize] as u32) << 8)
-            | ((self.ram[(address + 0) as usize] as u32) << 0)
+        ((self.ram[(offset + 3) as usize] as u32) << 24)
+            | ((self.ram[(offset + 2) as usize] as u32) << 16)
+            | ((self.ram[(offset + 1) as usize] as u32) << 8)
+            | ((self.ram[(offset + 0) as usize] as u32) << 0)
     }
 
     pub fn write_memory_word(&mut self, address: u32, value: u32) -> () {
@@ -423,7 +423,6 @@ impl Bus {
     }
 
     fn do_memory_word_write(&mut self, address: u32, value: u32) -> () {
-        debug!("do_memory_write {:x}", address);
         let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
 
         if address < memory_map::RAM_MIRROR_END {
@@ -611,22 +610,24 @@ impl Bus {
         for i in 0..memory_map::RAM_2MB_SIZE {
             let byte = self.ram[i as usize];
             if byte != 0x00 {
-                print!("{:02x} ", byte);
+                print!("{:02x}({:x}) ", byte, i);
             }
         }
         println!();
-        println!("--------");
+        println!("---");
     }
 
     pub fn dump_mem_ctrl_registers(&self) -> () {
         println!("Memory Control Registers state");
         let r = self.mem_ctrl_registers.regs;
-        println!("{:08x} {:08x} {:08x} {:08x}", r[0], r[1], r[2], r[3]);
-        println!("{:08x} {:08x} {:08x} {:08x}", r[4], r[5], r[6], r[7]);
-        println!("{:08x}", r[8]);
+        println!("{:8x} {:8x} {:8x} {:8x}", r[0], r[1], r[2], r[3]);
+        println!("{:8x} {:8x} {:8x} {:8x}", r[4], r[5], r[6], r[7]);
+        println!("{:8x}", r[8]);
 
         println!("Access Times");
         println!("{} {} {}", self.bios_access_time.byte, self.bios_access_time.halfword, self.bios_access_time.word);
         println!("{} {} {}", self.cdrom_access_time.byte, self.cdrom_access_time.halfword, self.cdrom_access_time.word);
+
+        println!("---");
     }
 }

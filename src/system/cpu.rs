@@ -26,10 +26,12 @@ pub struct CPU {
 }
 
 struct State {
+    cycle: usize,
     instruction: Instruction,
     registers: Registers,
     cop0_registers: Cop0Registers,
     frame_done: bool,
+
     // Caution - Load Delay
     //
     // The loaded data is NOT available to the next opcode, ie. the target
@@ -58,13 +60,19 @@ impl CPU {
     pub fn execute(&mut self, bus: &mut Bus) -> Result<(), String> {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
-        self.state.dump();
-        bus.dump_mem_ctrl_registers();
-        println!();
+
+        if self.state.cycle > 17300 {
+            self.state.dump();
+            bus.dump_ram();
+            bus.dump_mem_ctrl_registers();
+            println!();
+        }
 
         //let stdin = io::stdin();
         //let mut buffer = String::new();
         //stdin.lock().read_line(&mut buffer);
+
+        self.state.cycle += 1;
 
         Ok(())
     }
@@ -238,7 +246,7 @@ impl CPU {
         // JR rs
         let rs = self.state.instruction.get_rs();
         let rs_value = self.state.registers.read_register(rs).unwrap();
-        debug!("[rs={}", rs);
+        debug!("[rs={}]", rs);
         self.state.registers.npc = rs_value;
     }
 
@@ -256,12 +264,9 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
-        let address = ((base as i32) + (offset as i32)) as u32;
-        // Little endian
-        //let word = ((bus.ram[address + 3] as u32) << 24)
-        //    | ((bus.ram[address + 2] as u32) << 16)
-        //    | ((bus.ram[address + 1] as u32) << 8)
-        //    | ((bus.ram[address + 0] as u32) << 0);
+        let base_value = self.state.registers.read_register(base).unwrap();
+        let sext_offset = offset as i16 as i32;
+        let address = ((base_value as i32) + sext_offset) as u32;
         let word = bus.read_memory_word(address);
         self.state.registers.write_register(rt, word);
     }
@@ -397,16 +402,23 @@ impl CPU {
 impl State {
     fn new() -> Self {
         Self {
+            cycle: 0,
             instruction: Instruction::new(),
             registers: Registers::new(),
             cop0_registers: Cop0Registers::new(),
             frame_done: false,
+            //load_delay_register: 0,
+            //load_dalay_value: 0,
+            //next_load_delay_register: 0,
+            //next_load_dalay_value: 0,
         }
     }
 
     fn dump(&self) -> () {
+        println!("* Cycle {}", self.cycle);
         println!("PC={:x} NPC={:x}", self.registers.pc, self.registers.npc);
         println!("Inst={:x}", self.instruction.bits);
         self.registers.dump();
+        println!("---");
     }
 }
