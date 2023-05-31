@@ -8,14 +8,16 @@ const PHYSICAL_MEMORY_ADDRESS_MASK: u32 = 0x1FFFFFFF;
 // Memory Map
 //
 //  KUSEG     KSEG0     KSEG1
-//  00000000h 80000000h A0000000h  2048K  Main RAM (first 64K reserved for BIOS)
-//  1F000000h 9F000000h BF000000h  8192K  Expansion Region 1 (ROM/RAM)
-//  1F800000h 9F800000h    --      1K     Scratchpad (D-Cache used as Fast RAM)
-//  1F801000h 9F801000h BF801000h  4K     I/O Ports
-//  1F802000h 9F802000h BF802000h  8K     Expansion Region 2 (I/O Ports)
-//  1FA00000h 9FA00000h BFA00000h  2048K  Expansion Region 3 (SRAM BIOS region for DTL cards)
-//  1FC00000h 9FC00000h BFC00000h  512K   BIOS ROM (Kernel) (4096K max)
-//        FFFE0000h (in KSEG2)     0.5K   Internal CPU control registers (Cache Control)
+//  00000000 80000000 A0000000  2048K  Main RAM (first 64K reserved for BIOS)
+//  1F000000 9F000000 BF000000  8192K  Expansion Region 1 (ROM/RAM)
+//  1F800000 9F800000    --     1K     Scratchpad (D-Cache used as Fast RAM)
+//  1F801000 9F801000 BF801000  4K     I/O Ports
+//  1F802000 9F802000 BF802000  8K     Expansion Region 2 (I/O Ports)
+//  1FA00000 9FA00000 BFA00000  2048K  Expansion Region 3 (SRAM BIOS region for DTL cards)
+//  1FC00000 9FC00000 BFC00000  512K   BIOS ROM (Kernel) (4096K max)
+//
+//                      KSEG2
+//                    FFFE0000  0.5K   Internal CPU control registers (Cache Control)
 //
 // Kernel Memory: KSEG1 is the normal physical memory (uncached), KSEG0 is a
 // mirror thereof (but with cache enabled). KSEG2 is usually intended to contain
@@ -24,9 +26,26 @@ const PHYSICAL_MEMORY_ADDRESS_MASK: u32 = 0x1FFFFFFF;
 //
 // User Memory: KUSEG is intended to contain 2GB virtual memory (on extended
 // MIPS processors), the PSX doesn't support virtual memory, and KUSEG simply
-// contains a mirror of KSEG0/KSEG1
+// contains a mirror of KSEG0/KSEG1.
 //
-// 2MB RAM can be mirrored to the first 8MB (strangely, enabled by default)
+// As described above, the 512Mbyte KUSEG, KSEG0, and KSEG1 regions are mirrors
+// of each other. Additional mirrors within these 512MB regions are:
+//
+//  - 2MB RAM can be mirrored to the first 8MB (strangely, enabled by default)
+//  - 512K BIOS ROM can be mirrored to the last 4MB (disabled by default)
+//  - Expansion hardware (if any) may be mirrored within expansion region
+//  - The seven DMA Control Registers at 1F8010x8h are mirrored to 1F8010xCh
+//
+// You will see this very often in the code. The address tag is the first 3 bits.
+//
+// Tag: 0x00 => Address: 0x00000000    KUSEG    0                   0M-512M      512M    User Memory
+// Tag: 0x01 => Address: 0x20000000    KUSEG    2^29 = 512M         512M-1024M   512M    User Memory
+// Tag: 0x02 => Address: 0x40000000    KUSEG    2^30 = 1024M        1024-1536M   512M    User Memory
+// Tag: 0x03 => Address: 0x60000000    KUSEG    3 * 2^29 = 1536M    1536M-2048M  512M    User Memory
+// Tag: 0x04 => Address: 0x80000000    KSEG0    2 * 2^30 = 2024M    2048M-2560M  512M    Kernel Memory (Physical Memory Cached)
+// Tag: 0x05 => Address: 0xA0000000    KSEG1    5 * 2^29 = 2560M    2560M-3072M  512M    Kernel Memory (Physical Memory Uncached)
+// Tag: 0x06 => Address: 0xC0000000    KSEG2    3 * 2^30 = 3072M    3072M-3584M  512M    Kernel Memory (Cache Control)
+// Tag: 0x07 => Address: 0xE0000000    KSEG2    7 * 2^29 = 3584M    3584M-END     -      Kernel Memory (Cache Control)
 //
 // From https://psx-spx.consoledev.net/memorymap/
 
@@ -92,7 +111,97 @@ pub struct Bus {
     cdrom_access_time: AccessTimes,
 }
 
+// Unit-like structs for the Memory Access trait
+pub struct ReadByte;
+pub struct ReadHalfWord;
+pub struct ReadWord;
+pub struct WriteByte;
+pub struct WriteHalfWord;
+pub struct WriteWord;
+
 type TickCount = i32;
+
+trait MemoryAccess {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
+}
+
+impl MemoryAccess for ReadByte {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        0
+    }
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        0
+    }
+}
+
+impl MemoryAccess for ReadWord {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = address & memory_map::RAM_2MB_MASK;
+        // Little endian
+        *value = ((bus.ram[(offset + 3) as usize] as u32) << 24)
+            | ((bus.ram[(offset + 2) as usize] as u32) << 16)
+            | ((bus.ram[(offset + 1) as usize] as u32) << 8)
+            | ((bus.ram[(offset + 0) as usize] as u32) << 0);
+        0
+    }
+
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        0
+    }
+}
+
+impl MemoryAccess for WriteWord {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let address = address & memory_map::RAM_2MB_MASK;
+        // Little endian
+        bus.ram[(address + 0) as usize] = ((*value >> 0) & 0xFF) as u8;
+        bus.ram[(address + 1) as usize] = ((*value >> 8) & 0xFF) as u8;
+        bus.ram[(address + 2) as usize] = ((*value >> 16) & 0xFF) as u8;
+        bus.ram[(address + 3) as usize] = ((*value >> 24) & 0xFF) as u8;
+        0
+    }
+
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        0
+    }
+}
+
+//pub enum MemoryAccessType {
+//    Read,
+//    Write,
+//}
+//
+//pub enum MemoryAccessSize {
+//    Byte,
+//    HalfWord,
+//    Word,
+//}
+//
+//trait MemoryAccess<T> {
+//    fn read_from(&mut self, bus: &Bus, addres: u32);
+//    fn write_to(&self, bus: &mut Bus, addres: u32);
+//}
+//
+//impl MemoryAccess for u32 {
+//    fn read_from(&mut self, bus: &Bus, address: u32) {
+//        let offset = address & memory_map::RAM_2MB_MASK;
+//        // Little endian
+//        *self = ((self.ram[(offset + 3) as usize] as u32) << 24)
+//            | ((self.ram[(offset + 2) as usize] as u32) << 16)
+//            | ((self.ram[(offset + 1) as usize] as u32) << 8)
+//            | ((self.ram[(offset + 0) as usize] as u32) << 0)
+//    }
+//
+//    fn write_to(&self, bus: &mut Bus, address: u32) {
+//        let address = address & memory_map::RAM_2MB_MASK;
+//        // Little endian
+//        bus.ram[(address + 0) as usize] = ((*self >> 0) & 0xFF) as u8;
+//        bus.ram[(address + 1) as usize] = ((*self >> 8) & 0xFF) as u8;
+//        bus.ram[(address + 2) as usize] = ((*self >> 16) & 0xFF) as u8;
+//        bus.ram[(address + 3) as usize] = ((*self >> 24) & 0xFF) as u8;
+//    }
+//}
 
 struct AccessTimes {
     pub byte: TickCount,
@@ -362,32 +471,6 @@ impl Bus {
             todo!("Reading memory");
         }
 
-        ////// RAM
-        //if address < memory_map::RAM_MIRROR_END {
-        //    //println!("Address: {:x} (RAM)", address);
-        //    let address = address & memory_map::RAM_2MB_MASK;
-        //    debug_assert!(false);
-        //    return Ok(self.ram[address as usize] as u32);
-        //}
-
-        //// Mapped BIOS
-        //if address >= (memory_map::BIOS_BASE)
-        //    && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
-        //{
-        //    //println!("Address: {:x} (BIOS)", address);
-        //    let address = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
-        //    // R3000A is little endian! So the most significant bytes are
-        //    // stored in lower memory addresses.
-        //    // Funny enough, if you brutely read a u32 in C++ on the host
-        //    // (which usually is little endian), bytes will be arranged like
-        //    // [3, 2, 1, 0] and the instruction will be formed correctly.
-        //    let instruction: u32 = ((self.bios[address + 3] as u32) << 24)
-        //        | ((self.bios[address + 2] as u32) << 16)
-        //        | ((self.bios[address + 1] as u32) << 8)
-        //        | ((self.bios[address + 0] as u32) << 0);
-        //    return Ok(instruction);
-        //}
-
         panic!("Can't read memory: {}", address)
     }
 
@@ -398,6 +481,47 @@ impl Bus {
             | ((self.ram[(offset + 2) as usize] as u32) << 16)
             | ((self.ram[(offset + 1) as usize] as u32) << 8)
             | ((self.ram[(offset + 0) as usize] as u32) << 0)
+    }
+
+    pub fn access_memory<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {
+        let tag = address >> 29;
+        match tag {
+            0x00 | 0x04 | 0x05 => self.do_memory_access::<T>(address, value),
+            0x01 | 0x02 | 0x03 => panic!("Reading KUSEG above 512M!"),
+            0x06 | 0x07 => {
+                warn!("Reading KUSEG2 (cache control)");
+                0
+            }
+            _ => panic!("Accessing out of bounds! {}", tag),
+        }
+    }
+
+    fn do_memory_access<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {
+        let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
+
+        if address < memory_map::RAM_MIRROR_END {
+            debug!("Writing memory: RAM_MIRROR_END");
+            return T::do_ram_access(address, value, self);
+        } else if address >= memory_map::BIOS_BASE
+            && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
+        {
+            panic!("Writing memory: BIOS");
+        } else if address < memory_map::EXP1_BASE {
+            panic!("Invalid Address: BIOS < address < EXP1_BASE");
+        } else if address < (memory_map::EXP1_BASE + memory_map::EXP1_SIZE) {
+            todo!("EXP1 access");
+        } else if address < memory_map::MEMCTRL_BASE {
+            panic!("Invalid Address: EXP1 < address < MEMCTRL_BASE");
+        } else if address < (memory_map::MEMCTRL_BASE + memory_map::MEMCTRL_SIZE) {
+            T::do_memory_control_access(address, value, self)
+        } else {
+            debug!("Writing memory");
+            0
+        }
+    }
+
+    fn do_ram_access(&mut self, address: u32, value: Option<u32>) -> u32 {
+        0
     }
 
     pub fn write_memory_word(&mut self, address: u32, value: u32) -> () {
@@ -625,8 +749,16 @@ impl Bus {
         println!("{:8x}", r[8]);
 
         println!("Access Times");
-        println!("{} {} {}", self.bios_access_time.byte, self.bios_access_time.halfword, self.bios_access_time.word);
-        println!("{} {} {}", self.cdrom_access_time.byte, self.cdrom_access_time.halfword, self.cdrom_access_time.word);
+        println!(
+            "{} {} {}",
+            self.bios_access_time.byte, self.bios_access_time.halfword, self.bios_access_time.word
+        );
+        println!(
+            "{} {} {}",
+            self.cdrom_access_time.byte,
+            self.cdrom_access_time.halfword,
+            self.cdrom_access_time.word
+        );
 
         println!("---");
     }

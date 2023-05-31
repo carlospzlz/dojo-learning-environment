@@ -5,6 +5,9 @@ use crate::system::bios::BIOS_BASE;
 use crate::system::bios::BIOS_MASK;
 use crate::system::bios::BIOS_SIZE;
 use crate::system::bus::Bus;
+use crate::system::bus::ReadByte;
+use crate::system::bus::ReadWord;
+use crate::system::bus::WriteWord;
 use crate::system::cpu_types::Cop0Instruction;
 use crate::system::cpu_types::Cop0Reg;
 use crate::system::cpu_types::Cop0Registers;
@@ -31,7 +34,6 @@ struct State {
     registers: Registers,
     cop0_registers: Cop0Registers,
     frame_done: bool,
-
     // Caution - Load Delay
     //
     // The loaded data is NOT available to the next opcode, ie. the target
@@ -104,7 +106,7 @@ impl CPU {
                     InstructionFunct::OR => self.execute_or(),
                     InstructionFunct::SLL => self.execute_sll(),
                     InstructionFunct::SLTU => self.execute_sltu(),
-                    _ => todo!(),
+                    _ => todo!("FUNCT no implemented: {:?}", instruction.get_funct()),
                 }
             }
             InstructionOp::ADDI => self.execute_addi(),
@@ -113,6 +115,7 @@ impl CPU {
             InstructionOp::BEQ => self.execute_beq(),
             InstructionOp::BNE => self.execute_bne(),
             InstructionOp::COP0 => self.execute_cop0(),
+            InstructionOp::LB => self.execute_lb(bus),
             InstructionOp::LUI => self.execute_lui(),
             InstructionOp::LW => self.execute_lw(bus),
             InstructionOp::J => self.execute_j(),
@@ -132,7 +135,7 @@ impl CPU {
             InstructionOp::SWC1 => {}
             InstructionOp::SWC3 => {}
 
-            _ => todo!(),
+            _ => todo!("OP not implemented: {:?}", instruction.get_op_code()),
         };
         Ok(())
     }
@@ -250,6 +253,20 @@ impl CPU {
         self.state.registers.npc = rs_value;
     }
 
+    fn execute_lb(&mut self, bus: &mut Bus) -> () {
+        // LB rt, offset(base)
+        let rt = self.state.instruction.get_rt();
+        let base = self.state.instruction.get_base();
+        let offset = self.state.instruction.get_offset();
+        debug!("[rt={}, offset={}]", rt, offset);
+        let base_value = self.state.registers.read_register(base).unwrap();
+        let sext_offset = offset as i16 as i32;
+        let address = ((base_value as i32) + sext_offset) as u32;
+        let mut byte: u32 = 0;
+        bus.access_memory::<ReadByte>(address, &mut byte);
+        //self.state.registers.write_register(rt, word);
+    }
+
     fn execute_lui(&mut self) -> () {
         // LUI rt, immediate
         let rt = self.state.instruction.get_rt();
@@ -267,7 +284,8 @@ impl CPU {
         let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
-        let word = bus.read_memory_word(address);
+        let mut word: u32 = 0;
+        bus.access_memory::<ReadWord>(address, &mut word);
         self.state.registers.write_register(rt, word);
     }
 
@@ -364,12 +382,13 @@ impl CPU {
         let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
         let address = base_value + (sext_offset as u32);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let mut rt_value = self.state.registers.read_register(rt).unwrap();
         debug!(
             "Base: {:x} Offset: {:x} Address: {:x}",
             base as u32, offset, address
         );
-        bus.write_memory_word(address, rt_value);
+        //bus.write_memory_word(address, rt_value);
+        bus.access_memory::<WriteWord>(address, &mut rt_value);
     }
 
     // Coprocessor Instructions
