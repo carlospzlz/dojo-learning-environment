@@ -7,6 +7,8 @@ use crate::system::bios::BIOS_SIZE;
 use crate::system::bus::Bus;
 use crate::system::bus::ReadByte;
 use crate::system::bus::ReadWord;
+use crate::system::bus::WriteByte;
+use crate::system::bus::WriteHalfWord;
 use crate::system::bus::WriteWord;
 use crate::system::cpu_types::Cop0Instruction;
 use crate::system::cpu_types::Cop0Reg;
@@ -352,25 +354,26 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
+        let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
-        let address = ((base as i32) + sext_offset) as u32;
+        let address = ((base_value as i32) + sext_offset) as u32;
         let ts_value = self.state.registers.read_register(rt).unwrap();
-        let half_word = (ts_value & 0x000000FF) as u16;
-        bus.write_memory_half_word(address, half_word);
+        let mut value = (ts_value & 0x000000FF);
+        bus.access_memory::<WriteByte>(address, &mut value);
     }
 
     fn execute_sh(&mut self, bus: &mut Bus) -> () {
-        // SW rt, base(offset)
+        // SH rt, base(offset)
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
         let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
-        let address = base_value + (sext_offset as u32);
+        let address = ((base_value as i32) + sext_offset) as u32;
         let ts_value = self.state.registers.read_register(rt).unwrap();
-        let half_word = (ts_value & 0x0000FFFF) as u16;
-        bus.write_memory_half_word(address, half_word);
+        let mut value = (ts_value & 0x0000FFFF);
+        bus.access_memory::<WriteHalfWord>(address, &mut value);
     }
 
     fn execute_sw(&mut self, bus: &mut Bus) -> () {
@@ -381,13 +384,12 @@ impl CPU {
         debug!("[rt={}, offset={}]", rt, offset);
         let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
-        let address = base_value + (sext_offset as u32);
+        let address = ((base_value as i32) + sext_offset) as u32;
         let mut rt_value = self.state.registers.read_register(rt).unwrap();
         debug!(
             "Base: {:x} Offset: {:x} Address: {:x}",
             base as u32, offset, address
         );
-        //bus.write_memory_word(address, rt_value);
         bus.access_memory::<WriteWord>(address, &mut rt_value);
     }
 
@@ -395,26 +397,48 @@ impl CPU {
 
     fn execute_cop0(&mut self) -> () {
         if self.state.instruction.is_cop_common_instruction() {
-            self.execute_cop_common_instruction()
+            match self.state.instruction.get_cop_common_op() {
+                CopCommonInstruction::MFCN => self.execute_cop_common_instruction_mfcn(),
+                CopCommonInstruction::MTCN => self.execute_cop_common_instruction_mtcn(),
+                _ => panic!("Unhandled common COP0 instruction"),
+            }
         } else {
             match self.state.instruction.get_cop0_op() {
+                Cop0Instruction::RFE => self.execute_cop0_instruction_rfe(),
+                // No-Op
+                Cop0Instruction::TLBR => {}
+                Cop0Instruction::TLBWI => {}
+                Cop0Instruction::TLBWR => {}
+                Cop0Instruction::TLBP => {}
                 _ => todo!(),
             }
         }
     }
 
-    fn execute_cop_common_instruction(&mut self) -> () {
+    fn execute_cop_common_instruction_mfcn(&mut self) -> () {
+        // MFCN rt, rd
+        let cop_number = self.state.instruction.get_cop_number();
+        let rt = self.state.instruction.get_rt();
+        let cop0_reg = Cop0Reg::from(self.state.instruction.get_rd());
+        debug!("COP{} rt={}, rd={:?}]", cop_number, rt, cop0_reg);
+        let cop0_value = self.state
+            .cop0_registers
+            .read_register(cop0_reg);
+        self.state.registers.write_register(rt, cop0_value);
+    }
+
+    fn execute_cop_common_instruction_mtcn(&mut self) -> () {
         // MTCN rt, rd
         let cop_number = self.state.instruction.get_cop_number();
-        let cop_op = self.state.instruction.get_cop_common_op();
-        debug!("COP{}: Common Op: {:?}", cop_number, cop_op);
         let rt = self.state.instruction.get_rt();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
         let cop0_reg = Cop0Reg::from(self.state.instruction.get_rd());
-        self.state
-            .cop0_registers
-            .write_register(cop0_reg, rt_value)
-            .unwrap();
+        debug!("COP{} rt={}, rd={:?}]", cop_number, rt, cop0_reg);
+        let rt_value = self.state.registers.read_register(rt).unwrap();
+        self.state.cop0_registers.write_register(cop0_reg, rt_value)
+    }
+
+    fn execute_cop0_instruction_rfe(&mut self) -> () {
+        panic!("RFE!");
     }
 }
 

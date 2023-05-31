@@ -9,6 +9,7 @@ const PHYSICAL_MEMORY_ADDRESS_MASK: u32 = 0x1FFFFFFF;
 const RAM_READ_TICKS: TickCount = 6;
 
 // Memory Map
+// ============================================================================
 //
 //  KUSEG     KSEG0     KSEG1
 //  00000000 80000000 A0000000  2048K  Main RAM (first 64K reserved for BIOS)
@@ -51,6 +52,13 @@ const RAM_READ_TICKS: TickCount = 6;
 // Tag: 0x07 => Address: 0xE0000000    KSEG2    7 * 2^29 = 3584M    3584M-END     -      Kernel Memory (Cache Control)
 //
 // From https://psx-spx.consoledev.net/memorymap/
+
+// NOTES:
+//
+// R3000A is little endian! So the most significant bytes are stored in lower
+// memory addresses. Funny enough, if you brutely read a u32 in C++ on the host
+// (which usually is little endian), bytes will be arranged like [3, 2, 1, 0]
+// and the word will be formed correctly.
 
 mod memory_map {
     //const RAM_BASE = 0x00000000,
@@ -103,7 +111,7 @@ mod memory_map {
     //const EXP3_MASK = EXP3_SIZE - 1,
     pub const BIOS_BASE: u32 = 0x1FC00000;
     pub const BIOS_SIZE: u32 = 0x80000; // 512 KB
-    pub const BIOS_MASK: u32 = 0x7FFFF;
+    pub const BIOS_MASK: u32 = BIOS_SIZE - 1;
 }
 
 pub struct Bus {
@@ -122,9 +130,10 @@ pub struct WriteByte;
 pub struct WriteHalfWord;
 pub struct WriteWord;
 
-trait MemoryAccess {
+pub trait MemoryAccess {
     fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
 }
 
 impl MemoryAccess for ReadByte {
@@ -140,6 +149,12 @@ impl MemoryAccess for ReadByte {
         let index = offset >> 2;
         *value = bus.mem_ctrl_registers.regs[index as usize];
         2
+    }
+
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
+        *value = bus.bios[offset as usize] as u32;
+        bus.bios_access_time.byte
     }
 }
 
@@ -158,6 +173,13 @@ impl MemoryAccess for ReadHalfWord {
         let index = offset >> 2;
         *value = bus.mem_ctrl_registers.regs[index as usize];
         2
+    }
+
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
+        *value = ((bus.bios[(offset + 1) as usize] as u32) << 8)
+            | ((bus.bios[(offset + 0) as usize] as u32) << 0);
+        bus.bios_access_time.halfword
     }
 }
 
@@ -178,6 +200,15 @@ impl MemoryAccess for ReadWord {
         let index = offset >> 2;
         *value = bus.mem_ctrl_registers.regs[index as usize];
         2
+    }
+
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
+        *value = ((bus.bios[(offset + 3) as usize] as u32) << 24)
+            | ((bus.bios[(offset + 2) as usize] as u32) << 16)
+            | ((bus.bios[(offset + 1) as usize] as u32) << 8)
+            | ((bus.bios[(offset + 0) as usize] as u32) << 0);
+        bus.bios_access_time.word
     }
 }
 
@@ -203,6 +234,11 @@ impl MemoryAccess for WriteByte {
             bus.mem_ctrl_registers.regs[index as usize] = new_value;
             bus.recalculate_memory_timings();
         }
+        0
+    }
+
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        warn!("Trying to write to BIOS!");
         0
     }
 }
@@ -232,6 +268,11 @@ impl MemoryAccess for WriteHalfWord {
         }
         0
     }
+
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        warn!("Trying to write to BIOS!");
+        0
+    }
 }
 
 impl MemoryAccess for WriteWord {
@@ -259,6 +300,11 @@ impl MemoryAccess for WriteWord {
             bus.mem_ctrl_registers.regs[index as usize] = new_value;
             bus.recalculate_memory_timings();
         }
+        0
+    }
+
+    fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        warn!("Trying to write to BIOS!");
         0
     }
 }
@@ -468,7 +514,7 @@ impl Bus {
             //println!("Address: {:x} (RAM)", address);
             let address = address & memory_map::RAM_2MB_MASK;
             panic!("Dafuq: Reading instruction in RAM?");
-            return Ok(self.ram[address as usize] as u32);
+            //return Ok(self.ram[address as usize] as u32);
         }
 
         // Mapped BIOS
@@ -492,7 +538,7 @@ impl Bus {
         panic!("Can't read instruction: {}", address)
     }
 
-    pub fn read_memory_word(&self, address: u32) -> u32 {
+    pub fn access_memory<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {
         let tag = address >> 29;
         match tag {
             // 0x00: KUSEG    0M- 512M
@@ -503,49 +549,6 @@ impl Bus {
             // 0x05: KSEG  Physical Memory Uncached
             // 0x06: KSEG2
             // 0x07: KSEG2
-            0x00 | 0x04 => {
-                error!("Read cached memory");
-                self.do_memory_word_read(address)
-            }
-            0x01 | 0x02 | 0x03 => panic!("Exception: Reading above 512 MB"),
-            0x06 | 0x07 => todo!("Weird case"),
-            0x05 => self.do_memory_word_read(address),
-            _ => panic!("Address out of bounds: {:x}", address),
-        }
-    }
-
-    fn do_memory_word_read(&self, address: u32) -> u32 {
-        debug!("do_memory_read {:x}", address);
-        let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
-
-        if address < memory_map::RAM_MIRROR_END {
-            debug!("Reading memory: RAM_MIRROR_END");
-            return self.do_ram_word_read(address);
-        } else if address >= memory_map::BIOS_BASE
-            && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
-        {
-            debug!("Reading memory: BIOS");
-        } else if address < memory_map::EXP1_BASE {
-            debug!("Reading memory: BIOS");
-        } else {
-            todo!("Reading memory");
-        }
-
-        panic!("Can't read memory: {}", address)
-    }
-
-    fn do_ram_word_read(&self, address: u32) -> u32 {
-        let offset = address & memory_map::RAM_2MB_MASK;
-        // Little endian
-        ((self.ram[(offset + 3) as usize] as u32) << 24)
-            | ((self.ram[(offset + 2) as usize] as u32) << 16)
-            | ((self.ram[(offset + 1) as usize] as u32) << 8)
-            | ((self.ram[(offset + 0) as usize] as u32) << 0)
-    }
-
-    pub fn access_memory<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {
-        let tag = address >> 29;
-        match tag {
             0x00 | 0x04 | 0x05 => self.do_memory_access::<T>(address, value),
             0x01 | 0x02 | 0x03 => panic!("Reading KUSEG above 512M!"),
             0x06 | 0x07 => {
@@ -560,16 +563,18 @@ impl Bus {
         let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
 
         if address < memory_map::RAM_MIRROR_END {
-            debug!("Writing memory: RAM_MIRROR_END");
+            debug!("Memory Access: RAM_MIRROR_END");
             return T::do_ram_access(address, value, self);
         } else if address >= memory_map::BIOS_BASE
             && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
         {
-            panic!("Writing memory: BIOS");
+            debug!("Memory Access: BIOS");
+            return T::do_bios_access(address, value, self);
         } else if address < memory_map::EXP1_BASE {
             panic!("Invalid Address: BIOS < address < EXP1_BASE");
         } else if address < (memory_map::EXP1_BASE + memory_map::EXP1_SIZE) {
-            todo!("EXP1 access");
+            warn!("Memory Access: EXP1");
+            0
         } else if address < memory_map::MEMCTRL_BASE {
             panic!("Invalid Address: EXP1 < address < MEMCTRL_BASE");
         } else if address < (memory_map::MEMCTRL_BASE + memory_map::MEMCTRL_SIZE) {
@@ -577,81 +582,6 @@ impl Bus {
         } else {
             debug!("Writing memory");
             0
-        }
-    }
-
-    fn do_ram_access(&mut self, address: u32, value: Option<u32>) -> u32 {
-        0
-    }
-
-    pub fn write_memory_word(&mut self, address: u32, value: u32) -> () {
-        let tag = address >> 29;
-        match tag {
-            // 0x00: KUSEG    0M- 512M
-            // 0x01: KUSEG  512M-1024M
-            // 0x02: KUSEG 1024M-1536M
-            // 0x03: KUSEG 1536M-2048M
-            // 0x04: KSEG  Physical Memory Cached
-            // 0x05: KSEG  Physical Memory Uncached
-            // 0x06: KSEG2
-            // 0x07: KSEG2
-            0x00 | 0x04 => {
-                warn!("Word should be written to cache");
-                self.do_memory_word_write(address, value)
-            }
-            0x01 | 0x02 | 0x03 => panic!("Exception: Writing above 512 MB"),
-            0x06 | 0x07 => error!("Weird case"),
-            0x05 => self.do_memory_word_write(address, value),
-            _ => panic!("Address out of bounds: {:x}", address),
-        }
-    }
-
-    fn do_memory_word_write(&mut self, address: u32, value: u32) -> () {
-        let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
-
-        if address < memory_map::RAM_MIRROR_END {
-            debug!("Writing memory: RAM_MIRROR_END");
-            return self.do_ram_word_write(address, value);
-        } else if address >= memory_map::BIOS_BASE
-            && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
-        {
-            debug!("Writing memory: BIOS");
-        } else if address < memory_map::EXP1_BASE {
-            panic!("Invalid Address: BIOS < address < EXP1_BASE");
-        } else if address < (memory_map::EXP1_BASE + memory_map::EXP1_SIZE) {
-            todo!("EXP1 access");
-        } else if address < memory_map::MEMCTRL_BASE {
-            panic!("Invalid Address: EXP1 < address < MEMCTRL_BASE");
-        } else if address < (memory_map::MEMCTRL_BASE + memory_map::MEMCTRL_SIZE) {
-            self.do_memory_control_word_write(address, value);
-        } else {
-            debug!("Writing memory");
-        }
-    }
-
-    fn do_ram_word_write(&mut self, address: u32, value: u32) -> () {
-        let address = address & memory_map::RAM_2MB_MASK;
-        // Little endian
-        self.ram[(address + 0) as usize] = ((value >> 0) & 0xFF) as u8;
-        self.ram[(address + 1) as usize] = ((value >> 8) & 0xFF) as u8;
-        self.ram[(address + 2) as usize] = ((value >> 16) & 0xFF) as u8;
-        self.ram[(address + 3) as usize] = ((value >> 24) & 0xFF) as u8;
-    }
-
-    fn do_memory_control_word_write(&mut self, address: u32, value: u32) -> () {
-        debug!("do_memory_control_word_write");
-        let address = address & memory_map::MEMCTRL_MASK;
-        let index = address / 4;
-        let write_mask = if index == 8 {
-            ComDelayReg::WRITE_MASK
-        } else {
-            MemDelayReg::WRITE_MASK
-        };
-        let new_value =
-            (self.mem_ctrl_registers.regs[index as usize] & !write_mask) | (value & write_mask);
-        if self.mem_ctrl_registers.regs[index as usize] != new_value {
-            self.mem_ctrl_registers.regs[index as usize] = new_value;
-            self.recalculate_memory_timings();
         }
     }
 
@@ -761,32 +691,6 @@ impl Bus {
             cmp::max(halfword_access_time - 1, 0),
             cmp::max(word_access_time - 1, 0),
         )
-    }
-
-    pub fn write_memory_half_word(&self, address: u32, value: u16) -> Result<u32, String> {
-        let tag = address >> 29;
-        match tag {
-            // 0x00: KUSEG    0M- 512M
-            // 0x01: KUSEG  512M-1024M
-            // 0x02: KUSEG 1024M-1536M
-            // 0x03: KUSEG 1536M-2048M
-            // 0x04: KSEG  Physical Memory Cached
-            // 0x05: KSEG  Physical Memory Uncached
-            // 0x06: KSEG2
-            // 0x07: KSEG2
-            0x00 | 0x04 => {
-                warn!("Read cached memory");
-                Ok(0)
-            }
-            0x01 | 0x02 | 0x03 => panic!("Exception: Reading above 512 MB"),
-            0x06 | 0x07 => todo!("Weird case"),
-            0x05 => self.do_memory_half_word_read(address, value),
-            _ => panic!("Address out of bounds: {:x}", address),
-        }
-    }
-
-    fn do_memory_half_word_read(&self, address: u32, value: u16) -> Result<u32, String> {
-        Ok(0)
     }
 
     pub fn dump_ram(&self) -> () {

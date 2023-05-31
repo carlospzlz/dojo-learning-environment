@@ -4,6 +4,56 @@ use std::result::Result;
 const RESET_VECTOR: u32 = 0xBFC00000;
 
 // R3000A is based on the MIPS III instruction set architecture
+
+// Opcode/Parameter Instruction Encoding
+// ============================================================================
+//  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
+//   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
+//  -------+------+------+------+------+--------+------------
+//  000000 | N/A  | rt   | rd   | imm5 | 0000xx | shift-imm
+//  000000 | rs   | rt   | rd   | N/A  | 0001xx | shift-reg
+//  000000 | rs   | N/A  | N/A  | N/A  | 001000 | jr
+//  000000 | rs   | N/A  | rd   | N/A  | 001001 | jalr
+//  000000 | <-----comment20bit------> | 00110x | sys/brk
+//  000000 | N/A  | N/A  | rd   | N/A  | 0100x0 | mfhi/mflo
+//  000000 | rs   | N/A  | N/A  | N/A  | 0100x1 | mthi/mtlo
+//  000000 | rs   | rt   | N/A  | N/A  | 0110xx | mul/div
+//  000000 | rs   | rt   | rd   | N/A  | 10xxxx | alu-reg
+//  000001 | rs   | 00000| <--immediate16bit--> | bltz
+//  000001 | rs   | 00001| <--immediate16bit--> | bgez
+//  000001 | rs   | 10000| <--immediate16bit--> | bltzal
+//  000001 | rs   | 10001| <--immediate16bit--> | bgezal
+//  00001x | <---------immediate26bit---------> | j/jal
+//  00010x | rs   | rt   | <--immediate16bit--> | beq/bne
+//  00011x | rs   | N/A  | <--immediate16bit--> | blez/bgtz
+//  001xxx | rs   | rt   | <--immediate16bit--> | alu-imm
+//  001111 | N/A  | rt   | <--immediate16bit--> | lui-imm
+//  100xxx | rs   | rt   | <--immediate16bit--> | load rt,[rs+imm]
+//  101xxx | rs   | rt   | <--immediate16bit--> | store rt,[rs+imm]
+//  x1xxxx | <------coprocessor specific------> | coprocessor (see below)
+
+// Coprocessor Opcode/Parameter Instruction Encoding
+// ============================================================================
+//  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
+//   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
+//  -------+------+------+------+------+--------+------------
+//  0100nn |0|0000| rt   | rd   | N/A  | 000000 | MFCn rt,rd_dat  ;rt = dat
+//  0100nn |0|0010| rt   | rd   | N/A  | 000000 | CFCn rt,rd_cnt  ;rt = cnt
+//  0100nn |0|0100| rt   | rd   | N/A  | 000000 | MTCn rt,rd_dat  ;dat = rt
+//  0100nn |0|0110| rt   | rd   | N/A  | 000000 | CTCn rt,rd_cnt  ;cnt = rt
+//  0100nn |0|1000|00000 | <--immediate16bit--> | BCnF target ;jump if false
+//  0100nn |0|1000|00001 | <--immediate16bit--> | BCnT target ;jump if true
+//  0100nn |1| <--------immediate25bit--------> | COPn imm25
+//  010000 |1|0000| N/A  | N/A  | N/A  | 000001 | COP0 01h  ;=TLBR, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 000010 | COP0 02h  ;=TLBWI, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 000110 | COP0 06h  ;=TLBWR, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 001000 | COP0 08h  ;=TLBP, unused on PS1
+//  010000 |1|0000| N/A  | N/A  | N/A  | 010000 | COP0 10h  ;=RFE
+//  1100nn | rs   | rt   | <--immediate16bit--> | LWCn rt_dat,[rs+imm]
+//  1110nn | rs   | rt   | <--immediate16bit--> | SWCn rt_dat,[rs+imm]
+//
+// From https://psx-spx.consoledev.net/cpuspecifications/
+
 #[derive(Debug)]
 pub enum InstructionOp {
     FUNCT = 0,
@@ -72,7 +122,7 @@ impl From<u8> for CopCommonInstruction {
 pub enum Cop0Instruction {
     TLBR = 0x01,  // Translation Lookaside Buffer Read
     TLBWI = 0x02, // Translation Lookaside Buffer Write Indexed
-    TLBW = 0x04,  // Translation Lookaside Buffer Write
+    TLBWR = 0x04, // Translation Lookaside Buffer Write
     TLBP = 0x08,  // Translation Lookaside Buffer Probe
     RFE = 0x10,   // Return From Exception
 }
@@ -82,7 +132,7 @@ impl From<u8> for Cop0Instruction {
         match value {
             1 => Cop0Instruction::TLBR,
             2 => Cop0Instruction::TLBWI,
-            4 => Cop0Instruction::TLBW,
+            4 => Cop0Instruction::TLBWR,
             8 => Cop0Instruction::TLBP,
             16 => Cop0Instruction::RFE,
             _ => panic!("Unknown Cop0 Instruction: {}", value),
@@ -205,53 +255,6 @@ impl From<u8> for InstructionFunct {
         }
     }
 }
-
-// Opcode/Parameter Instruction Encoding
-// ============================================================================
-//  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
-//   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
-//  -------+------+------+------+------+--------+------------
-//  000000 | N/A  | rt   | rd   | imm5 | 0000xx | shift-imm
-//  000000 | rs   | rt   | rd   | N/A  | 0001xx | shift-reg
-//  000000 | rs   | N/A  | N/A  | N/A  | 001000 | jr
-//  000000 | rs   | N/A  | rd   | N/A  | 001001 | jalr
-//  000000 | <-----comment20bit------> | 00110x | sys/brk
-//  000000 | N/A  | N/A  | rd   | N/A  | 0100x0 | mfhi/mflo
-//  000000 | rs   | N/A  | N/A  | N/A  | 0100x1 | mthi/mtlo
-//  000000 | rs   | rt   | N/A  | N/A  | 0110xx | mul/div
-//  000000 | rs   | rt   | rd   | N/A  | 10xxxx | alu-reg
-//  000001 | rs   | 00000| <--immediate16bit--> | bltz
-//  000001 | rs   | 00001| <--immediate16bit--> | bgez
-//  000001 | rs   | 10000| <--immediate16bit--> | bltzal
-//  000001 | rs   | 10001| <--immediate16bit--> | bgezal
-//  00001x | <---------immediate26bit---------> | j/jal
-//  00010x | rs   | rt   | <--immediate16bit--> | beq/bne
-//  00011x | rs   | N/A  | <--immediate16bit--> | blez/bgtz
-//  001xxx | rs   | rt   | <--immediate16bit--> | alu-imm
-//  001111 | N/A  | rt   | <--immediate16bit--> | lui-imm
-//  100xxx | rs   | rt   | <--immediate16bit--> | load rt,[rs+imm]
-//  101xxx | rs   | rt   | <--immediate16bit--> | store rt,[rs+imm]
-//  x1xxxx | <------coprocessor specific------> | coprocessor (see below)
-
-// Coprocessor Opcode/Parameter Instruction Encoding
-// ============================================================================
-//  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
-//   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
-//  -------+------+------+------+------+--------+------------
-//  0100nn |0|0000| rt   | rd   | N/A  | 000000 | MFCn rt,rd_dat  ;rt = dat
-//  0100nn |0|0010| rt   | rd   | N/A  | 000000 | CFCn rt,rd_cnt  ;rt = cnt
-//  0100nn |0|0100| rt   | rd   | N/A  | 000000 | MTCn rt,rd_dat  ;dat = rt
-//  0100nn |0|0110| rt   | rd   | N/A  | 000000 | CTCn rt,rd_cnt  ;cnt = rt
-//  0100nn |0|1000|00000 | <--immediate16bit--> | BCnF target ;jump if false
-//  0100nn |0|1000|00001 | <--immediate16bit--> | BCnT target ;jump if true
-//  0100nn |1| <--------immediate25bit--------> | COPn imm25
-//  010000 |1|0000| N/A  | N/A  | N/A  | 000001 | COP0 01h  ;=TLBR, unused on PS1
-//  010000 |1|0000| N/A  | N/A  | N/A  | 000010 | COP0 02h  ;=TLBWI, unused on PS1
-//  010000 |1|0000| N/A  | N/A  | N/A  | 000110 | COP0 06h  ;=TLBWR, unused on PS1
-//  010000 |1|0000| N/A  | N/A  | N/A  | 001000 | COP0 08h  ;=TLBP, unused on PS1
-//  010000 |1|0000| N/A  | N/A  | N/A  | 010000 | COP0 10h  ;=RFE
-//  1100nn | rs   | rt   | <--immediate16bit--> | LWCn rt_dat,[rs+imm]
-//  1110nn | rs   | rt   | <--immediate16bit--> | SWCn rt_dat,[rs+imm]
 
 pub struct Instruction {
     pub bits: u32,
@@ -478,14 +481,15 @@ impl Cop0Registers {
         }
     }
 
-    pub fn read_register(&self, reg: Cop0Reg) -> Result<u32, String> {
+    pub fn read_register(&self, reg: Cop0Reg) -> u32 {
         match reg {
-            Cop0Reg::BPC => Ok(self.bpc),
-            _ => Err(format!("Cop0 Register Read Error: {:?}", reg)),
+            Cop0Reg::BPC => self.bpc,
+            Cop0Reg::SR => self.sr,
+            _ => panic!("Cop0 Register Read Error: {:?}", reg),
         }
     }
 
-    pub fn write_register(&mut self, reg: Cop0Reg, value: u32) -> Result<(), String> {
+    pub fn write_register(&mut self, reg: Cop0Reg, value: u32) -> () {
         match reg {
             Cop0Reg::BDA => self.bda = value,
             Cop0Reg::BDAM => self.bdam = value,
@@ -495,8 +499,7 @@ impl Cop0Registers {
             Cop0Reg::DCIC => self.dcic = value,
             Cop0Reg::JUMPDEST => self.tar = value,
             Cop0Reg::SR => self.sr = value,
-            _ => return Err(format!("Cop0 Register Write Error: {:?}", reg)),
+            _ => panic!("Cop0 Register Write Error: {:?}", reg),
         }
-        Ok(())
     }
 }
