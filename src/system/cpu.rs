@@ -262,9 +262,9 @@ impl CPU {
         let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
-        let mut byte: u32 = 0;
-        bus.access_memory::<ReadByte>(address, &mut byte);
-        //self.state.registers.write_register(rt, word);
+        let mut value: u32 = u32::default();
+        bus.access_memory::<ReadByte>(address, &mut value);
+        self.state.registers.write_register(rt, value);
     }
 
     fn execute_lui(&mut self) -> () {

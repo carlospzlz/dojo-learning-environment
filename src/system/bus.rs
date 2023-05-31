@@ -3,7 +3,10 @@ use crate::system::bios::BIOS_SIZE;
 use log::{debug, error, info, warn};
 use std::cmp;
 
+type TickCount = i32;
+
 const PHYSICAL_MEMORY_ADDRESS_MASK: u32 = 0x1FFFFFFF;
+const RAM_READ_TICKS: TickCount = 6;
 
 // Memory Map
 //
@@ -119,8 +122,6 @@ pub struct WriteByte;
 pub struct WriteHalfWord;
 pub struct WriteWord;
 
-type TickCount = i32;
-
 trait MemoryAccess {
     fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
@@ -128,10 +129,35 @@ trait MemoryAccess {
 
 impl MemoryAccess for ReadByte {
     fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
-        0
+        let offset = address & memory_map::RAM_2MB_MASK;
+        *value = bus.ram[offset as usize] as u32;
+        RAM_READ_TICKS
     }
+
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
-        0
+        let offset = address & memory_map::MEMCTRL_MASK;
+        // Each register is 4 bytes
+        let index = offset >> 2;
+        *value = bus.mem_ctrl_registers.regs[index as usize];
+        2
+    }
+}
+
+impl MemoryAccess for ReadHalfWord {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = address & memory_map::RAM_2MB_MASK;
+        // Little endian
+        *value = ((bus.ram[(offset + 1) as usize] as u32) << 8)
+            | ((bus.ram[(offset + 0) as usize] as u32) << 0);
+        RAM_READ_TICKS
+    }
+
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = address & memory_map::MEMCTRL_MASK;
+        // Each register is 4 bytes
+        let index = offset >> 2;
+        *value = bus.mem_ctrl_registers.regs[index as usize];
+        2
     }
 }
 
@@ -143,10 +169,67 @@ impl MemoryAccess for ReadWord {
             | ((bus.ram[(offset + 2) as usize] as u32) << 16)
             | ((bus.ram[(offset + 1) as usize] as u32) << 8)
             | ((bus.ram[(offset + 0) as usize] as u32) << 0);
+        RAM_READ_TICKS
+    }
+
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let offset = address & memory_map::MEMCTRL_MASK;
+        // Each register is 4 bytes
+        let index = offset >> 2;
+        *value = bus.mem_ctrl_registers.regs[index as usize];
+        2
+    }
+}
+
+impl MemoryAccess for WriteByte {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let address = address & memory_map::RAM_2MB_MASK;
+        // Little endian
+        bus.ram[(address + 0) as usize] = ((*value >> 0) & 0xFF) as u8;
         0
     }
 
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let address = address & memory_map::MEMCTRL_MASK;
+        let index = address >> 2;
+        let write_mask = if index == 8 {
+            ComDelayReg::WRITE_MASK
+        } else {
+            MemDelayReg::WRITE_MASK
+        };
+        let new_value =
+            (bus.mem_ctrl_registers.regs[index as usize] & !write_mask) | (*value & write_mask);
+        if bus.mem_ctrl_registers.regs[index as usize] != new_value {
+            bus.mem_ctrl_registers.regs[index as usize] = new_value;
+            bus.recalculate_memory_timings();
+        }
+        0
+    }
+}
+
+impl MemoryAccess for WriteHalfWord {
+    fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let address = address & memory_map::RAM_2MB_MASK;
+        // Little endian
+        bus.ram[(address + 0) as usize] = ((*value >> 0) & 0xFF) as u8;
+        bus.ram[(address + 1) as usize] = ((*value >> 8) & 0xFF) as u8;
+        0
+    }
+
+    fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let address = address & memory_map::MEMCTRL_MASK;
+        let index = address >> 2;
+        let write_mask = if index == 8 {
+            ComDelayReg::WRITE_MASK
+        } else {
+            MemDelayReg::WRITE_MASK
+        };
+        let new_value =
+            (bus.mem_ctrl_registers.regs[index as usize] & !write_mask) | (*value & write_mask);
+        if bus.mem_ctrl_registers.regs[index as usize] != new_value {
+            bus.mem_ctrl_registers.regs[index as usize] = new_value;
+            bus.recalculate_memory_timings();
+        }
         0
     }
 }
@@ -163,45 +246,22 @@ impl MemoryAccess for WriteWord {
     }
 
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        let address = address & memory_map::MEMCTRL_MASK;
+        let index = address >> 2;
+        let write_mask = if index == 8 {
+            ComDelayReg::WRITE_MASK
+        } else {
+            MemDelayReg::WRITE_MASK
+        };
+        let new_value =
+            (bus.mem_ctrl_registers.regs[index as usize] & !write_mask) | (*value & write_mask);
+        if bus.mem_ctrl_registers.regs[index as usize] != new_value {
+            bus.mem_ctrl_registers.regs[index as usize] = new_value;
+            bus.recalculate_memory_timings();
+        }
         0
     }
 }
-
-//pub enum MemoryAccessType {
-//    Read,
-//    Write,
-//}
-//
-//pub enum MemoryAccessSize {
-//    Byte,
-//    HalfWord,
-//    Word,
-//}
-//
-//trait MemoryAccess<T> {
-//    fn read_from(&mut self, bus: &Bus, addres: u32);
-//    fn write_to(&self, bus: &mut Bus, addres: u32);
-//}
-//
-//impl MemoryAccess for u32 {
-//    fn read_from(&mut self, bus: &Bus, address: u32) {
-//        let offset = address & memory_map::RAM_2MB_MASK;
-//        // Little endian
-//        *self = ((self.ram[(offset + 3) as usize] as u32) << 24)
-//            | ((self.ram[(offset + 2) as usize] as u32) << 16)
-//            | ((self.ram[(offset + 1) as usize] as u32) << 8)
-//            | ((self.ram[(offset + 0) as usize] as u32) << 0)
-//    }
-//
-//    fn write_to(&self, bus: &mut Bus, address: u32) {
-//        let address = address & memory_map::RAM_2MB_MASK;
-//        // Little endian
-//        bus.ram[(address + 0) as usize] = ((*self >> 0) & 0xFF) as u8;
-//        bus.ram[(address + 1) as usize] = ((*self >> 8) & 0xFF) as u8;
-//        bus.ram[(address + 2) as usize] = ((*self >> 16) & 0xFF) as u8;
-//        bus.ram[(address + 3) as usize] = ((*self >> 24) & 0xFF) as u8;
-//    }
-//}
 
 struct AccessTimes {
     pub byte: TickCount,
