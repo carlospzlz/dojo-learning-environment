@@ -65,10 +65,10 @@ impl CPU {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
 
-        if self.state.cycle > 17300 {
+        if self.state.cycle > 70000 {
             self.state.dump();
-            bus.dump_ram();
-            bus.dump_mem_ctrl_registers();
+            //bus.dump_ram();
+            //bus.dump_mem_ctrl_registers();
             println!();
         }
 
@@ -81,9 +81,9 @@ impl CPU {
         Ok(())
     }
 
-    fn fetch_instruction(&mut self, bus: &Bus) -> Result<(), String> {
+    fn fetch_instruction(&mut self, bus: &mut Bus) -> Result<(), String> {
         let address = self.state.registers.pc;
-        let bits = bus.fetch_instruction(address).unwrap();
+        let bits = bus.fetch_instruction(address);
         self.state.instruction.bits = bits;
         self.state.registers.pc = self.state.registers.npc;
         self.state.registers.npc += std::mem::size_of::<u32>() as u32;
@@ -103,6 +103,7 @@ impl CPU {
                 debug!("FUNCT: {:?}", instruction.get_funct());
                 match instruction.get_funct() {
                     InstructionFunct::ADDU => self.execute_addu(),
+                    InstructionFunct::AND => self.execute_and(),
                     InstructionFunct::JR => self.execute_jr(),
                     InstructionFunct::MFHI => self.execute_mfhi(),
                     InstructionFunct::OR => self.execute_or(),
@@ -188,6 +189,18 @@ impl CPU {
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let rt_value = self.state.registers.read_register(rt).unwrap();
         let result = rs_value + rt_value;
+        self.state.registers.write_register(rd, result);
+    }
+
+    fn execute_and(&mut self) -> () {
+        // AND rd, rt, rs
+        let rd = self.state.instruction.get_rd();
+        let rt = self.state.instruction.get_rt();
+        let rs = self.state.instruction.get_rs();
+        debug!("AND rd={} rt={}, rs={}", rd, rt, rs);
+        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let result = rs_value & rt_value;
         self.state.registers.write_register(rd, result);
     }
 

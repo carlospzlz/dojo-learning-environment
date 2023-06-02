@@ -489,7 +489,7 @@ impl Bus {
         self.recalculate_memory_timings();
     }
 
-    pub fn fetch_instruction(&self, address: u32) -> Result<u32, String> {
+    pub fn fetch_instruction(&mut self, address: u32) -> u32 {
         let tag = address >> 29;
         match tag {
             // 0x00: KUSEG    0M- 512M
@@ -506,36 +506,26 @@ impl Bus {
         }
     }
 
-    fn do_instruction_read(&self, address: u32) -> Result<u32, String> {
+    fn do_instruction_read(&mut self, address: u32) -> u32 {
         let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
 
-        // RAM
+        // Read instruction from RAM
         if address < memory_map::RAM_MIRROR_END {
-            //println!("Address: {:x} (RAM)", address);
-            let address = address & memory_map::RAM_2MB_MASK;
-            panic!("Dafuq: Reading instruction in RAM?");
-            //return Ok(self.ram[address as usize] as u32);
+            let mut value = u32::default();
+            ReadWord::do_ram_access(address, &mut value, self);
+            return value;
         }
 
-        // Mapped BIOS
+        // Read instruction from BIOS
         if address >= (memory_map::BIOS_BASE)
             && address < (memory_map::BIOS_BASE + memory_map::BIOS_SIZE)
         {
-            //println!("Address: {:x} (BIOS)", address);
-            let address = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
-            // R3000A is little endian! So the most significant bytes are
-            // stored in lower memory addresses.
-            // Funny enough, if you brutely read a u32 in C++ on the host
-            // (which usually is little endian), bytes will be arranged like
-            // [3, 2, 1, 0] and the instruction will be formed correctly.
-            let instruction: u32 = ((self.bios[address + 3] as u32) << 24)
-                | ((self.bios[address + 2] as u32) << 16)
-                | ((self.bios[address + 1] as u32) << 8)
-                | ((self.bios[address + 0] as u32) << 0);
-            return Ok(instruction);
-        }
+            let mut value = u32::default();
+            ReadWord::do_bios_access(address, &mut value, self);
+            return value;
+        };
 
-        panic!("Can't read instruction: {}", address)
+        panic!("Can't read instruction: {}", address);
     }
 
     pub fn access_memory<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {

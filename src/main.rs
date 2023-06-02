@@ -42,7 +42,7 @@ fn main() {
     // System
     let mut system = System::new();
     system.boot_system();
-    for i in 0..25000 {
+    loop {
         system.execute();
     }
 }
