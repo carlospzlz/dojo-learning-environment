@@ -114,12 +114,36 @@ mod memory_map {
     pub const BIOS_MASK: u32 = BIOS_SIZE - 1;
 }
 
+// Data Cache related constants
+mod d_cache {
+    pub const LOCATION: usize = 0x1F800000;
+    pub const LOCATION_MASK: usize = 0xFFFFFC00;
+    pub const OFFSET_MASK: usize = 0x000003FF;
+    pub const SIZE: usize = 0x400; // 1KB
+}
+
+// Instruction Cache related constants
+mod i_cache {
+    pub const SIZE: usize = 0x1000; // 4KB
+    pub const SLOTS: usize = SIZE / std::mem::size_of::<u32>();
+    pub const LINE_SIZE: usize = 16;
+    pub const LINES: usize = SIZE / LINE_SIZE;
+    pub const SLOTS_PER_LINE: usize = SLOTS / LINES;
+    pub const TAG_ADDRESS_MASK: usize = 0xFFFFFFF0;
+    pub const INVALID_BITS: usize = 0x0F;
+}
+
 pub struct Bus {
     pub bios: [u8; memory_map::BIOS_SIZE as usize],
     pub ram: [u8; memory_map::RAM_2MB_SIZE as usize],
     mem_ctrl_registers: MemCtrlRegisters,
     bios_access_time: AccessTimes,
     cdrom_access_time: AccessTimes,
+
+    // Caches
+    icache_tags: [u32; i_cache::LINES],
+    icache_data: [u8; i_cache::SIZE],
+    dcache: [u8; d_cache::SIZE],
 }
 
 // Unit-like structs for the Memory Access trait
@@ -134,6 +158,7 @@ pub trait MemoryAccess {
     fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
     fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
+    fn is_write() -> bool;
 }
 
 impl MemoryAccess for ReadByte {
@@ -155,6 +180,10 @@ impl MemoryAccess for ReadByte {
         let offset = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
         *value = bus.bios[offset as usize] as u32;
         bus.bios_access_time.byte
+    }
+
+    fn is_write() -> bool {
+        false
     }
 }
 
@@ -180,6 +209,10 @@ impl MemoryAccess for ReadHalfWord {
         *value = ((bus.bios[(offset + 1) as usize] as u32) << 8)
             | ((bus.bios[(offset + 0) as usize] as u32) << 0);
         bus.bios_access_time.halfword
+    }
+
+    fn is_write() -> bool {
+        false
     }
 }
 
@@ -209,6 +242,10 @@ impl MemoryAccess for ReadWord {
             | ((bus.bios[(offset + 1) as usize] as u32) << 8)
             | ((bus.bios[(offset + 0) as usize] as u32) << 0);
         bus.bios_access_time.word
+    }
+
+    fn is_write() -> bool {
+        false
     }
 }
 
@@ -241,6 +278,10 @@ impl MemoryAccess for WriteByte {
         warn!("Trying to write to BIOS!");
         0
     }
+
+    fn is_write() -> bool {
+        true
+    }
 }
 
 impl MemoryAccess for WriteHalfWord {
@@ -272,6 +313,10 @@ impl MemoryAccess for WriteHalfWord {
     fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
         warn!("Trying to write to BIOS!");
         0
+    }
+
+    fn is_write() -> bool {
+        true
     }
 }
 
@@ -306,6 +351,10 @@ impl MemoryAccess for WriteWord {
     fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
         warn!("Trying to write to BIOS!");
         0
+    }
+
+    fn is_write() -> bool {
+        true
     }
 }
 
@@ -482,6 +531,9 @@ impl Bus {
                 halfword: 0,
                 word: 0,
             },
+            icache_tags: [0; i_cache::LINES],
+            icache_data: [0; i_cache::SIZE],
+            dcache: [0; d_cache::SIZE],
         }
     }
 
@@ -500,7 +552,10 @@ impl Bus {
             // 0x05: KSEG  Physical Memory Uncached
             // 0x06: KSEG2
             // 0x07: KSEG2
-            0x00 | 0x04 => self.do_instruction_read(address),
+            0x00 | 0x04 => {
+                // Ignore cache access, access memory directly
+                self.do_instruction_read(address)
+            }
             0x05 => self.do_instruction_read(address),
             _ => panic!("Address out of bounds: {:x}", address),
         }
@@ -528,7 +583,12 @@ impl Bus {
         panic!("Can't read instruction: {}", address);
     }
 
-    pub fn access_memory<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {
+    pub fn access_memory<T: MemoryAccess>(
+        &mut self,
+        address: u32,
+        value: &mut u32,
+        cache_is_isolated: bool,
+    ) -> TickCount {
         let tag = address >> 29;
         match tag {
             // 0x00: KUSEG    0M- 512M
@@ -539,7 +599,14 @@ impl Bus {
             // 0x05: KSEG  Physical Memory Uncached
             // 0x06: KSEG2
             // 0x07: KSEG2
-            0x00 | 0x04 | 0x05 => self.do_memory_access::<T>(address, value),
+            0x00 | 0x04 => {
+                if cache_is_isolated && T::is_write() {
+                    // With the cache isolated, no writes to memory occur.
+                    return 0;
+                }
+                self.do_memory_access::<T>(address, value)
+            }
+            0x05 => self.do_memory_access::<T>(address, value),
             0x01 | 0x02 | 0x03 => panic!("Reading KUSEG above 512M!"),
             0x06 | 0x07 => {
                 warn!("Reading KUSEG2 (cache control)");
@@ -685,10 +752,15 @@ impl Bus {
 
     pub fn dump_ram(&self) -> () {
         println!("RAM state");
+        let mut count = 1;
         for i in 0..memory_map::RAM_2MB_SIZE {
             let byte = self.ram[i as usize];
             if byte != 0x00 {
-                print!("{:02x}({:x}) ", byte, i);
+                print!("{:x}:{:02x} ", i, byte);
+                if count % 10 == 0 {
+                    println!()
+                }
+                count += 1;
             }
         }
         println!();

@@ -27,6 +27,7 @@ const RAM_MIRROR_END: u32 = 0x800000; // 8 * 2^20 - 8MB
 const RAM_SIZE: usize = 0x200000; // Size of the RAM (2 MB)
 
 pub struct CPU {
+    // Probably CPU and State can be merged
     state: State,
 }
 
@@ -65,9 +66,12 @@ impl CPU {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
 
-        if self.state.cycle > 70000 {
+        // 79400 - 79500
+        let start = 79450;
+        if self.state.cycle > start && self.state.cycle < (start + 10) {
+            //if self.state.cycle > start {
             self.state.dump();
-            //bus.dump_ram();
+            bus.dump_ram();
             //bus.dump_mem_ctrl_registers();
             println!();
         }
@@ -92,7 +96,7 @@ impl CPU {
 
     fn execute_instruction(&mut self, bus: &mut Bus) -> Result<(), String> {
         let instruction = &self.state.instruction;
-        debug!(
+        info!(
             "{:x}  {} ({:?})",
             instruction.bits,
             instruction.to_string(),
@@ -102,6 +106,7 @@ impl CPU {
             InstructionOp::FUNCT => {
                 debug!("FUNCT: {:?}", instruction.get_funct());
                 match instruction.get_funct() {
+                    InstructionFunct::ADD => self.execute_add(),
                     InstructionFunct::ADDU => self.execute_addu(),
                     InstructionFunct::AND => self.execute_and(),
                     InstructionFunct::JR => self.execute_jr(),
@@ -180,6 +185,18 @@ impl CPU {
         self.state.registers.write_register(rt, result);
     }
 
+    fn execute_add(&mut self) -> () {
+        // ADDU rd, rs, rt, immediate
+        let rd = self.state.instruction.get_rd();
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        debug!("[rd={}, rs={}, rt={}]", rd, rt, rs);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let result = rs_value + rt_value;
+        self.state.registers.write_register(rd, result);
+    }
+
     fn execute_addu(&mut self) -> () {
         // ADDU rd, rs, rt, immediate
         let rd = self.state.instruction.get_rd();
@@ -214,7 +231,6 @@ impl CPU {
         let rt_value = self.state.registers.read_register(rt).unwrap();
         if rs_value == rt_value {
             self.state.registers.npc = self.state.registers.pc + (offset as u32);
-            println!("Branch!");
         }
     }
 
@@ -232,7 +248,6 @@ impl CPU {
             // Add, PC interpreted as i32
             let npc = self.state.registers.pc as i32 + offset;
             self.state.registers.npc = npc as u32;
-            println!("Branch!");
         }
     }
 
@@ -278,7 +293,8 @@ impl CPU {
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value: u32 = u32::default();
-        bus.access_memory::<ReadByte>(address, &mut value);
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated);
         self.state.registers.write_register(rt, value);
     }
 
@@ -300,7 +316,8 @@ impl CPU {
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut word: u32 = 0;
-        bus.access_memory::<ReadWord>(address, &mut word);
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<ReadWord>(address, &mut word, cache_is_isolated);
         self.state.registers.write_register(rt, word);
     }
 
@@ -371,8 +388,9 @@ impl CPU {
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let ts_value = self.state.registers.read_register(rt).unwrap();
-        let mut value = (ts_value & 0x000000FF);
-        bus.access_memory::<WriteByte>(address, &mut value);
+        let mut value = ts_value & 0x000000FF;
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<WriteByte>(address, &mut value, cache_is_isolated);
     }
 
     fn execute_sh(&mut self, bus: &mut Bus) -> () {
@@ -385,8 +403,9 @@ impl CPU {
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let ts_value = self.state.registers.read_register(rt).unwrap();
-        let mut value = (ts_value & 0x0000FFFF);
-        bus.access_memory::<WriteHalfWord>(address, &mut value);
+        let mut value = ts_value & 0x0000FFFF;
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<WriteHalfWord>(address, &mut value, cache_is_isolated);
     }
 
     fn execute_sw(&mut self, bus: &mut Bus) -> () {
@@ -394,16 +413,17 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
-        debug!("[rt={}, offset={}]", rt, offset);
+        info!("[rt={}, offset={}]", rt, offset);
         let base_value = self.state.registers.read_register(base).unwrap();
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut rt_value = self.state.registers.read_register(rt).unwrap();
-        debug!(
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        info!(
             "Base: {:x} Offset: {:x} Address: {:x}",
             base as u32, offset, address
         );
-        bus.access_memory::<WriteWord>(address, &mut rt_value);
+        bus.access_memory::<WriteWord>(address, &mut rt_value, cache_is_isolated);
     }
 
     // Coprocessor Instructions
@@ -434,9 +454,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let cop0_reg = Cop0Reg::from(self.state.instruction.get_rd());
         debug!("COP{} rt={}, rd={:?}]", cop_number, rt, cop0_reg);
-        let cop0_value = self.state
-            .cop0_registers
-            .read_register(cop0_reg);
+        let cop0_value = self.state.cop0_registers.read_register(cop0_reg);
         self.state.registers.write_register(rt, cop0_value);
     }
 
@@ -451,7 +469,11 @@ impl CPU {
     }
 
     fn execute_cop0_instruction_rfe(&mut self) -> () {
-        panic!("RFE!");
+        // Return From Exception
+        let mode_bits = self.state.cop0_registers.sr.get_mode_bits();
+        // Restore mode (From Duckstation)
+        let mode_bits = (mode_bits & 0b110000) | (mode_bits >> 2);
+        self.state.cop0_registers.sr.set_mode_bits(mode_bits);
     }
 }
 
