@@ -1,6 +1,8 @@
 use crate::system::bios::BIOS_SIZE;
 
+use generic_array::{typenum::U16, GenericArray};
 use log::{debug, error, info, warn};
+use sha2::{Digest, Sha256};
 use std::cmp;
 
 type TickCount = i32;
@@ -765,6 +767,13 @@ impl Bus {
         }
         println!();
         println!("---");
+    }
+
+    pub fn get_ram_hash(&self) -> String{
+        let mut hasher = Sha256::new();
+        hasher.update(self.ram);
+        let result = hasher.finalize();
+        format!("{:x}", result)
     }
 
     pub fn dump_mem_ctrl_registers(&self) -> () {

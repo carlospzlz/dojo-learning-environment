@@ -67,11 +67,12 @@ impl CPU {
         self.execute_instruction(bus);
 
         // 79400 - 79500
-        let start = 79450;
-        if self.state.cycle > start && self.state.cycle < (start + 10) {
-            //if self.state.cycle > start {
+        let start = 10000;
+        let amount = 100;
+        if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump();
-            bus.dump_ram();
+            println!("RAM SHA-256: {}", bus.get_ram_hash());
+            //bus.dump_ram();
             //bus.dump_mem_ctrl_registers();
             println!();
         }
@@ -121,6 +122,8 @@ impl CPU {
             InstructionOp::ADDIU => self.execute_addiu(),
             InstructionOp::ANDI => self.execute_andi(),
             InstructionOp::BEQ => self.execute_beq(),
+            InstructionOp::BGTZ => self.execute_bgtz(),
+            InstructionOp::BLEZ => self.execute_blez(),
             InstructionOp::BNE => self.execute_bne(),
             InstructionOp::COP0 => self.execute_cop0(),
             InstructionOp::LB => self.execute_lb(bus),
@@ -231,6 +234,36 @@ impl CPU {
         let rt_value = self.state.registers.read_register(rt).unwrap();
         if rs_value == rt_value {
             self.state.registers.npc = self.state.registers.pc + (offset as u32);
+        }
+    }
+
+    fn execute_bgtz(&mut self) -> () {
+        // BGTZ rs, offset
+        let rs = self.state.instruction.get_rs();
+        let offset = self.state.instruction.get_offset();
+        debug!("BGTZ rs={}, offset={}]", rs, offset);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        if rs_value > 0 {
+            // Sign extend to i32
+            let offset = (offset as i16 as i32) << 2;
+            // Add, PC interpreted as i32
+            let npc = self.state.registers.pc as i32 + offset;
+            self.state.registers.npc = npc as u32;
+        }
+    }
+
+    fn execute_blez(&mut self) -> () {
+        // BLEZ rs, offset
+        let rs = self.state.instruction.get_rs();
+        let offset = self.state.instruction.get_offset();
+        debug!("BGTZ rs={}, offset={}]", rs, offset);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        if rs_value <= 0 {
+            // Sign extend to i32
+            let offset = (offset as i16 as i32) << 2;
+            // Add, PC interpreted as i32
+            let npc = self.state.registers.pc as i32 + offset;
+            self.state.registers.npc = npc as u32;
         }
     }
 
