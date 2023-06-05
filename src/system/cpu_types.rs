@@ -383,8 +383,8 @@ impl Registers {
         self.hi
     }
 
-    pub fn write_register(&mut self, index: u8, value: u32) -> Result<(), String> {
-        Ok(self.gprs[index as usize] = value)
+    pub fn write_register(&mut self, index: u8, value: u32) -> () {
+        self.gprs[index as usize] = value;
     }
 
     pub fn write_register_upper(&mut self, index: u8, value: u16) -> Result<(), String> {

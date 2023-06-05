@@ -67,7 +67,7 @@ impl CPU {
         self.execute_instruction(bus);
 
         // 79400 - 79500
-        let start = 83875;
+        let start = 86000;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump();
@@ -111,6 +111,7 @@ impl CPU {
                     InstructionFunct::ADD => self.execute_add(),
                     InstructionFunct::ADDU => self.execute_addu(),
                     InstructionFunct::AND => self.execute_and(),
+                    InstructionFunct::JALR => self.execute_jalr(),
                     InstructionFunct::JR => self.execute_jr(),
                     InstructionFunct::MFHI => self.execute_mfhi(),
                     InstructionFunct::OR => self.execute_or(),
@@ -128,6 +129,7 @@ impl CPU {
             InstructionOp::BNE => self.execute_bne(),
             InstructionOp::COP0 => self.execute_cop0(),
             InstructionOp::LB => self.execute_lb(bus),
+            InstructionOp::LBU => self.execute_lbu(bus),
             InstructionOp::LUI => self.execute_lui(),
             InstructionOp::LW => self.execute_lw(bus),
             InstructionOp::J => self.execute_j(),
@@ -313,6 +315,20 @@ impl CPU {
         self.state.registers.npc = address;
     }
 
+    fn execute_jalr(&mut self) -> () {
+        // JALR rs
+        let rd = self.state.instruction.get_rd();
+        let rs = self.state.instruction.get_rs();
+        debug!("JALR rd={} rs={}", rd, rs);
+        // Link Register
+        self.state
+            .registers
+            .write_register(rd, self.state.registers.npc);
+        // Jump
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        self.state.registers.npc = rs_value;
+    }
+
     fn execute_jr(&mut self) -> () {
         // JR rs
         let rs = self.state.instruction.get_rs();
@@ -331,6 +347,22 @@ impl CPU {
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value: u32 = u32::default();
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated);
+        let sext_value = ((value & 0xFF) as i8 as i32) as u32;
+        self.state.registers.write_register(rt, sext_value);
+    }
+
+    fn execute_lbu(&mut self, bus: &mut Bus) -> () {
+        // LBU rt, offset(base)
+        let rt = self.state.instruction.get_rt();
+        let base = self.state.instruction.get_base();
+        let offset = self.state.instruction.get_offset();
+        debug!("[rt={}, offset={}]", rt, offset);
+        let base_value = self.state.registers.read_register(base).unwrap();
+        let sext_offset = offset as i16 as i32;
+        let address = ((base_value as i32) + sext_offset) as u32;
+        let mut value = u32::default();
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
         bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated);
         self.state.registers.write_register(rt, value);
