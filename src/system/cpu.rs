@@ -123,6 +123,7 @@ impl CPU {
             InstructionOp::ADDI => self.execute_addi(),
             InstructionOp::ADDIU => self.execute_addiu(),
             InstructionOp::ANDI => self.execute_andi(),
+            InstructionOp::B => self.execute_b(),
             InstructionOp::BEQ => self.execute_beq(),
             InstructionOp::BGTZ => self.execute_bgtz(),
             InstructionOp::BLEZ => self.execute_blez(),
@@ -225,6 +226,47 @@ impl CPU {
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let result = rs_value & rt_value;
         self.state.registers.write_register(rd, result);
+    }
+
+    fn execute_b(&mut self) -> () {
+        // B rs, offset
+        //
+        // This instruction seems to be under BcondZ:
+        //
+        // BGEZ    0000 01ss sss0 0001 ffff ffff ffff ffff
+        // BGEZAL  0000 01ss sss1 0001 ffff ffff ffff ffff
+        // BGEZALL 0000 01ss sss1 0011 ffff ffff ffff ffff
+        // BGEZL   0000 01ss sss0 0011 ffff ffff ffff ffff
+        //
+        // BLTZ    0000 01ss sss0 0000 ffff ffff ffff ffff
+        // BLTZAL  0000 01ss sss1 0000 ffff ffff ffff ffff
+        // BLTZALL 0000 01ss sss1 0010 ffff ffff ffff ffff
+        // BLTZL   0000 01ss sss0 0010 ffff ffff ffff ffff
+        //
+        // I needed some help from Duckstation for this instruction
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        let offset = self.state.instruction.get_offset();
+        debug!("B rs={}, rt={}, offset={}]", rs, rt, offset);
+
+        // Link (it's done even if branch isn't taken)
+        // Not sure what's going on here, it seems that ALL and L don't link
+        if (rt & 0x1E) == 0x10 {
+            self.state.registers.write_register(31, self.state.registers.npc);
+        }
+
+        // Jump
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let is_bgez = (rt & 1) == 1;
+        // XOR, these two must conditions be different
+        // (from duckstation, pretty smart)
+        if ((rs_value as i32) < 0) ^ is_bgez {
+            // Sign extend to i32 and multiply by 4 (4 bytes)
+            let offset = (offset as i16 as i32) << 2;
+            // Add, PC interpreted as i32
+            let npc = self.state.registers.pc as i32 + offset;
+            self.state.registers.npc = npc as u32;
+        }
     }
 
     fn execute_beq(&mut self) -> () {
