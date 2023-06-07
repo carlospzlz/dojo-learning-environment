@@ -67,7 +67,7 @@ impl CPU {
         self.execute_instruction(bus);
 
         // 79400 - 79500
-        let start = 86000;
+        let start = 120000;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump();
@@ -111,9 +111,11 @@ impl CPU {
                     InstructionFunct::ADD => self.execute_add(),
                     InstructionFunct::ADDU => self.execute_addu(),
                     InstructionFunct::AND => self.execute_and(),
+                    InstructionFunct::DIV => self.execute_div(),
                     InstructionFunct::JALR => self.execute_jalr(),
                     InstructionFunct::JR => self.execute_jr(),
                     InstructionFunct::MFHI => self.execute_mfhi(),
+                    InstructionFunct::MFLO => self.execute_mflo(),
                     InstructionFunct::OR => self.execute_or(),
                     InstructionFunct::SLL => self.execute_sll(),
                     InstructionFunct::SLTU => self.execute_sltu(),
@@ -255,7 +257,9 @@ impl CPU {
         // Link (it's done even if branch isn't taken)
         // Not sure what's going on here, it seems that ALL and L don't link
         if (rt & 0x1E) == 0x10 {
-            self.state.registers.write_register(31, self.state.registers.npc);
+            self.state
+                .registers
+                .write_register(31, self.state.registers.npc);
         }
 
         // Jump
@@ -333,6 +337,30 @@ impl CPU {
             // Add, PC interpreted as i32
             let npc = self.state.registers.pc as i32 + offset;
             self.state.registers.npc = npc as u32;
+        }
+    }
+
+    fn execute_div(&mut self) -> () {
+        // DIV rs, rt, offset
+        // Quotient -> LO
+        // Reminder -> HI
+        // Again, some help needed from Duckstation.
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        debug!("DIV rs={}, rt={}", rs, rt);
+        let num = self.state.registers.read_register(rs).unwrap() as i32;
+        let denom = self.state.registers.read_register(rt).unwrap() as i32;
+        if denom == 0 {
+            // Divide by zero
+            self.state.registers.lo = if num >= 0 { 0xFFFFFFFF } else { 0x1 };
+            self.state.registers.hi = num as u32;
+        } else if (num as u32) == 0x80000000 && denom == -1 {
+            // Unrepresentable
+            self.state.registers.lo = 0x80000000;
+            self.state.registers.hi = 0x0;
+        } else {
+            self.state.registers.lo = (num / denom) as u32;
+            self.state.registers.hi = (num % denom) as u32;
         }
     }
 
@@ -439,10 +467,19 @@ impl CPU {
     fn execute_mfhi(&mut self) -> () {
         // MFHI rd
         let rd = self.state.instruction.get_rd();
-        debug!("[rd={}]", rd);
-        let hi_value = self.state.registers.read_register_hi();
+        debug!("MFHI rd={}", rd);
+        let hi_value = self.state.registers.hi;
         self.state.registers.write_register(rd, hi_value);
     }
+
+    fn execute_mflo(&mut self) -> () {
+        // MFLO rd
+        let rd = self.state.instruction.get_rd();
+        debug!("MFLO rd={}", rd);
+        let lo_value = self.state.registers.lo;
+        self.state.registers.write_register(rd, lo_value);
+    }
+
 
     fn execute_or(&mut self) -> () {
         // OR rd, rt, rs

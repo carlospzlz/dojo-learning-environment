@@ -769,7 +769,7 @@ impl Bus {
         println!("---");
     }
 
-    pub fn get_ram_hash(&self) -> String{
+    pub fn get_ram_hash(&self) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.ram);
         let result = hasher.finalize();

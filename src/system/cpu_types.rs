@@ -357,8 +357,8 @@ pub struct Registers {
     gprs: [u32; 32],
 
     // Not accessible to instructions
-    hi: u32,      // This holds the high 32 bits of the 64-bit result
-    lo: u32,      // This holds the low 32 bits of the 64-bit result
+    pub hi: u32,  // This holds the high 32 bits of the 64-bit result
+    pub lo: u32,  // This holds the low 32 bits of the 64-bit result
     pub pc: u32, // At execution time: the address of the next instruction to execute (already fetched)
     pub npc: u32, // At execution time: the address of the next instruction to fetch
 }
@@ -377,10 +377,6 @@ impl Registers {
 
     pub fn read_register(&self, index: u8) -> Result<u32, String> {
         Ok(self.gprs[index as usize])
-    }
-
-    pub fn read_register_hi(&self) -> u32 {
-        self.hi
     }
 
     pub fn write_register(&mut self, index: u8, value: u32) -> () {
@@ -413,6 +409,8 @@ impl Registers {
             "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
             r[24], r[25], r[26], r[27], r[28], r[29], r[30], r[31]
         );
+        println!("LO: {:8x}", self.lo);
+        println!("HI: {:8x}", self.hi);
     }
 }
 
