@@ -117,6 +117,8 @@ impl CPU {
                     InstructionFunct::OR => self.execute_or(),
                     InstructionFunct::SLL => self.execute_sll(),
                     InstructionFunct::SLTU => self.execute_sltu(),
+                    InstructionFunct::SRA => self.execute_sra(),
+                    InstructionFunct::SUBU => self.execute_subu(),
                     _ => todo!("FUNCT no implemented: {:?}", instruction.get_funct()),
                 }
             }
@@ -137,6 +139,7 @@ impl CPU {
             InstructionOp::JAL => self.execute_jal(),
             InstructionOp::ORI => self.execute_ori(),
             InstructionOp::SB => self.execute_sb(bus),
+            InstructionOp::SLTI => self.execute_slti(),
             InstructionOp::SW => self.execute_sw(bus),
             InstructionOp::SH => self.execute_sh(bus),
 
@@ -475,6 +478,18 @@ impl CPU {
         self.state.registers.write_register(rd, result);
     }
 
+    fn execute_slti(&mut self) -> () {
+        // SLTI rs, rt, immediate
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        let immediate = self.state.instruction.get_immediate();
+        debug!("SLTI rs={}, rt={} immediate={}", rs, rt, immediate);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let sext_immediate = immediate as i16 as i32;
+        let result = ((rs_value as i32) < sext_immediate) as u32;
+        self.state.registers.write_register(rt, result);
+    }
+
     fn execute_sltu(&mut self) -> () {
         // SLTU rd, rs, rt
         let rd = self.state.instruction.get_rd();
@@ -483,11 +498,19 @@ impl CPU {
         debug!("[rd={}, rs={}, rt={}]", rd, rs, rt);
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let rt_value = self.state.registers.read_register(rt).unwrap();
-        if rs_value < rt_value {
-            self.state.registers.write_register(rd, 1);
-        } else {
-            self.state.registers.write_register(rd, 0);
-        }
+        let result = (rs_value < rt_value) as u32;
+        self.state.registers.write_register(rd, result);
+    }
+
+    fn execute_sra(&mut self) -> () {
+        // SRA rd, rt, shamt
+        let rd = self.state.instruction.get_rd();
+        let rt = self.state.instruction.get_rt();
+        let shamt = self.state.instruction.get_shamt();
+        debug!("SRA rd={}, rt={}, shamt={}", rd, rt, shamt);
+        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let result = rt_value >> shamt;
+        self.state.registers.write_register(rd, result);
     }
 
     fn execute_sb(&mut self, bus: &mut Bus) -> () {
@@ -518,6 +541,18 @@ impl CPU {
         let mut value = ts_value & 0x0000FFFF;
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
         bus.access_memory::<WriteHalfWord>(address, &mut value, cache_is_isolated);
+    }
+
+    fn execute_subu(&mut self) -> () {
+        // SLTU rd, rs, rt
+        let rd = self.state.instruction.get_rd();
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        debug!("SUBU rd={}, rs={}, rt={}", rd, rs, rt);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let result = rs_value - rt_value;
+        self.state.registers.write_register(rd, result);
     }
 
     fn execute_sw(&mut self, bus: &mut Bus) -> () {
