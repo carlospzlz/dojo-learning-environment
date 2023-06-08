@@ -67,7 +67,7 @@ impl CPU {
         self.execute_instruction(bus);
 
         // 130000 - 135000
-        let start = 2695360;
+        let start = 136500;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
@@ -558,7 +558,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         debug!("SLT rd={}, rs={}, rt={}", rd, rs, rt);
         let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rs).unwrap();
+        let rt_value = self.state.registers.read_register(rt).unwrap();
         let result = ((rs_value as i32) < (rt_value as i32)) as u32;
         self.state.registers.write_register(rd, result);
     }
