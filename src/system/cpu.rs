@@ -67,7 +67,7 @@ impl CPU {
         self.execute_instruction(bus);
 
         // 130000 - 135000
-        let start = 136500;
+        let start = 2695600;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
