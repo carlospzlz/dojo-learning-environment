@@ -66,11 +66,13 @@ impl CPU {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
 
-        // 79400 - 79500
-        let start = 120000;
+        // 130000 - 135000
+        let start = 2695360;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
-            self.state.dump();
+            self.state.dump_header();
+            self.state.dump_registers();
+            println!("---");
             println!("RAM SHA-256: {}", bus.get_ram_hash());
             //bus.dump_ram();
             //bus.dump_mem_ctrl_registers();
@@ -112,16 +114,23 @@ impl CPU {
                     InstructionFunct::ADDU => self.execute_addu(),
                     InstructionFunct::AND => self.execute_and(),
                     InstructionFunct::DIV => self.execute_div(),
+                    InstructionFunct::DIVU => self.execute_divu(),
                     InstructionFunct::JALR => self.execute_jalr(),
                     InstructionFunct::JR => self.execute_jr(),
                     InstructionFunct::MFHI => self.execute_mfhi(),
                     InstructionFunct::MFLO => self.execute_mflo(),
                     InstructionFunct::OR => self.execute_or(),
                     InstructionFunct::SLL => self.execute_sll(),
+                    InstructionFunct::SLT => self.execute_slt(),
                     InstructionFunct::SLTU => self.execute_sltu(),
                     InstructionFunct::SRA => self.execute_sra(),
+                    InstructionFunct::SRL => self.execute_srl(),
                     InstructionFunct::SUBU => self.execute_subu(),
-                    _ => todo!("FUNCT no implemented: {:?}", instruction.get_funct()),
+                    _ => todo!(
+                        "FUNCT no implemented: {:?} (cycle={})",
+                        instruction.get_funct(),
+                        self.state.cycle
+                    ),
                 }
             }
             InstructionOp::ADDI => self.execute_addi(),
@@ -142,6 +151,7 @@ impl CPU {
             InstructionOp::ORI => self.execute_ori(),
             InstructionOp::SB => self.execute_sb(bus),
             InstructionOp::SLTI => self.execute_slti(),
+            InstructionOp::SLTIU => self.execute_sltiu(),
             InstructionOp::SW => self.execute_sw(bus),
             InstructionOp::SH => self.execute_sh(bus),
 
@@ -161,11 +171,12 @@ impl CPU {
     }
 
     fn execute_addi(&mut self) -> () {
+        // Add Immediate
         // ADDI rt, rs, immediate
         let rt = self.state.instruction.get_rt();
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
-        debug!("[rt={}, rs={}, immediate={}]", rt, rs, immediate);
+        debug!("ADDI rt={}, rs={}, immediate={}", rt, rs, immediate);
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let sext_immediate = immediate as i16 as i32;
         let result = ((rs_value as i32) + sext_immediate) as u32;
@@ -173,11 +184,12 @@ impl CPU {
     }
 
     fn execute_addiu(&mut self) -> () {
+        // Add Immediate Unsigned
         // ADDIU rt, rs, immediate
         let rt = self.state.instruction.get_rt();
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
-        debug!("[rt={}, rs={}, immediate={}]", rt, rs, immediate);
+        debug!("ADDI rt={}, rs={}, immediate={}", rt, rs, immediate);
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let sext_immediate = immediate as i16 as i32;
         //  While ADDI triggers an exception on overflow, ADDIU performs an
@@ -324,11 +336,12 @@ impl CPU {
     }
 
     fn execute_bne(&mut self) -> () {
+        // Branch on Not Equal
         // BNE rs, rt, offset
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         let offset = self.state.instruction.get_offset();
-        debug!("[rs={}, rt={}, offset={}]", rs, rt, offset);
+        debug!("BNE rs={}, rt={}, offset={}", rs, rt, offset);
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let rt_value = self.state.registers.read_register(rt).unwrap();
         if rs_value != rt_value {
@@ -341,6 +354,7 @@ impl CPU {
     }
 
     fn execute_div(&mut self) -> () {
+        // Division
         // DIV rs, rt, offset
         // Quotient -> LO
         // Reminder -> HI
@@ -361,6 +375,27 @@ impl CPU {
         } else {
             self.state.registers.lo = (num / denom) as u32;
             self.state.registers.hi = (num % denom) as u32;
+        }
+    }
+
+    fn execute_divu(&mut self) -> () {
+        // Division Unsigned
+        // DIV rs, rt, offset
+        // Quotient -> LO
+        // Reminder -> HI
+        // Again, some help needed from Duckstation.
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        debug!("DIV rs={}, rt={}", rs, rt);
+        let num = self.state.registers.read_register(rs).unwrap();
+        let denom = self.state.registers.read_register(rt).unwrap();
+        if denom == 0 {
+            // Divide by zero
+            self.state.registers.lo = 0xFFFFFFFF;
+            self.state.registers.hi = num;
+        } else {
+            self.state.registers.lo = num / denom;
+            self.state.registers.hi = num % denom;
         }
     }
 
@@ -450,6 +485,7 @@ impl CPU {
     }
 
     fn execute_lw(&mut self, bus: &mut Bus) -> () {
+        // Load Word
         // LW rt, offset(base)
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
@@ -479,7 +515,6 @@ impl CPU {
         let lo_value = self.state.registers.lo;
         self.state.registers.write_register(rd, lo_value);
     }
-
 
     fn execute_or(&mut self) -> () {
         // OR rd, rt, rs
@@ -515,7 +550,34 @@ impl CPU {
         self.state.registers.write_register(rd, result);
     }
 
+    fn execute_slt(&mut self) -> () {
+        // Set on Less Than
+        // SLT rd, rs, rt
+        let rd = self.state.instruction.get_rd();
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        debug!("SLT rd={}, rs={}, rt={}", rd, rs, rt);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rt_value = self.state.registers.read_register(rs).unwrap();
+        let result = ((rs_value as i32) < (rt_value as i32)) as u32;
+        self.state.registers.write_register(rd, result);
+    }
+
     fn execute_slti(&mut self) -> () {
+        // Set on Less Than Immediate
+        // SLTI rs, rt, immediate
+        let rs = self.state.instruction.get_rs();
+        let rt = self.state.instruction.get_rt();
+        let immediate = self.state.instruction.get_immediate();
+        debug!("SLTI rs={}, rt={}, immediate={}", rs, rt, immediate);
+        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let sext_immediate = immediate as i16 as i32;
+        let result = ((rs_value as i32) < sext_immediate) as u32;
+        self.state.registers.write_register(rt, result);
+    }
+
+    fn execute_sltiu(&mut self) -> () {
+        // Set on Less Than Immediate Unsigned
         // SLTI rs, rt, immediate
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
@@ -523,11 +585,12 @@ impl CPU {
         debug!("SLTI rs={}, rt={} immediate={}", rs, rt, immediate);
         let rs_value = self.state.registers.read_register(rs).unwrap();
         let sext_immediate = immediate as i16 as i32;
-        let result = ((rs_value as i32) < sext_immediate) as u32;
+        let result = (rs_value < (sext_immediate as u32)) as u32;
         self.state.registers.write_register(rt, result);
     }
 
     fn execute_sltu(&mut self) -> () {
+        // Set Less Than Unsigned
         // SLTU rd, rs, rt
         let rd = self.state.instruction.get_rd();
         let rs = self.state.instruction.get_rs();
@@ -540,17 +603,31 @@ impl CPU {
     }
 
     fn execute_sra(&mut self) -> () {
+        // Shift Right Arithmetic (signed)
         // SRA rd, rt, shamt
         let rd = self.state.instruction.get_rd();
         let rt = self.state.instruction.get_rt();
         let shamt = self.state.instruction.get_shamt();
         debug!("SRA rd={}, rt={}, shamt={}", rd, rt, shamt);
         let rt_value = self.state.registers.read_register(rt).unwrap();
+        let result = ((rt_value as i32) >> shamt) as u32;
+        self.state.registers.write_register(rd, result);
+    }
+
+    fn execute_srl(&mut self) -> () {
+        // Shift Right Logical (unsigned)
+        // SRL rd, rt, shamt
+        let rd = self.state.instruction.get_rd();
+        let rt = self.state.instruction.get_rt();
+        let shamt = self.state.instruction.get_shamt();
+        debug!("SRL rd={}, rt={}, shamt={}", rd, rt, shamt);
+        let rt_value = self.state.registers.read_register(rt).unwrap();
         let result = rt_value >> shamt;
         self.state.registers.write_register(rd, result);
     }
 
     fn execute_sb(&mut self, bus: &mut Bus) -> () {
+        // Store Byte
         // SB rt, base(offset)
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
@@ -566,6 +643,7 @@ impl CPU {
     }
 
     fn execute_sh(&mut self, bus: &mut Bus) -> () {
+        // Store Halfword
         // SH rt, base(offset)
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
@@ -581,7 +659,8 @@ impl CPU {
     }
 
     fn execute_subu(&mut self) -> () {
-        // SLTU rd, rs, rt
+        // Substract Unsigned
+        // SUBU rd, rs, rt
         let rd = self.state.instruction.get_rd();
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
@@ -593,6 +672,7 @@ impl CPU {
     }
 
     fn execute_sw(&mut self, bus: &mut Bus) -> () {
+        // Store Word
         // SW rt, base(offset)
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
@@ -633,6 +713,7 @@ impl CPU {
     }
 
     fn execute_cop_common_instruction_mfcn(&mut self) -> () {
+        // Move From Coprocessor N
         // MFCN rt, rd
         let cop_number = self.state.instruction.get_cop_number();
         let rt = self.state.instruction.get_rt();
@@ -643,6 +724,7 @@ impl CPU {
     }
 
     fn execute_cop_common_instruction_mtcn(&mut self) -> () {
+        // Move To Coprocessor N
         // MTCN rt, rd
         let cop_number = self.state.instruction.get_cop_number();
         let rt = self.state.instruction.get_rt();
@@ -676,11 +758,13 @@ impl State {
         }
     }
 
-    fn dump(&self) -> () {
+    fn dump_header(&self) -> () {
         println!("* Cycle {}", self.cycle);
         println!("PC={:x} NPC={:x}", self.registers.pc, self.registers.npc);
         println!("Inst={:x}", self.instruction.bits);
+    }
+
+    fn dump_registers(&self) -> () {
         self.registers.dump();
-        println!("---");
     }
 }
