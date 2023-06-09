@@ -7,6 +7,7 @@ const RESET_VECTOR: u32 = 0xBFC00000;
 
 // Opcode/Parameter Instruction Encoding
 // ============================================================================
+//
 //  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
 //   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
 //  -------+------+------+------+------+--------+------------
@@ -31,9 +32,10 @@ const RESET_VECTOR: u32 = 0xBFC00000;
 //  100xxx | rs   | rt   | <--immediate16bit--> | load rt,[rs+imm]
 //  101xxx | rs   | rt   | <--immediate16bit--> | store rt,[rs+imm]
 //  x1xxxx | <------coprocessor specific------> | coprocessor (see below)
-
+//
 // Coprocessor Opcode/Parameter Instruction Encoding
 // ============================================================================
+//
 //  31..26 |25..21|20..16|15..11|10..6 |  5..0  |
 //   6bit  | 5bit | 5bit | 5bit | 5bit |  6bit  |
 //  -------+------+------+------+------+--------+------------
@@ -52,7 +54,92 @@ const RESET_VECTOR: u32 = 0xBFC00000;
 //  1100nn | rs   | rt   | <--immediate16bit--> | LWCn rt_dat,[rs+imm]
 //  1110nn | rs   | rt   | <--immediate16bit--> | SWCn rt_dat,[rs+imm]
 //
+//
 // From https://psx-spx.consoledev.net/cpuspecifications/
+
+// Exception Handling
+// ============================================================================
+//
+// cop0r13 - CAUSE - (Read-only, except, Bit8-9 are R/W)
+//
+// Describes the most recently recognised exception
+//
+//  0-1   -      Not used (zero)
+//  2-6   Excode Describes what kind of exception occured:
+//                 00 INT     Interrupt
+//                 01 MOD     Tlb modification (none such in PSX)
+//                 02 TLBL    Tlb load         (none such in PSX)
+//                 03 TLBS    Tlb store        (none such in PSX)
+//                 04 AdEL    Address error, Data load or Instruction fetch
+//                 05 AdES    Address error, Data store
+//                            The address errors occur when attempting to read
+//                            outside of KUseg in user mode and when the address
+//                            is misaligned. (See also: BadVaddr register)
+//                 06 IBE     Bus error on Instruction fetch
+//                 07 DBE     Bus error on Data load/store
+//                 08 Syscall Generated unconditionally by syscall instruction
+//                 09 BP      Breakpoint - break instruction
+//                 0A RI      Reserved instruction
+//                 0B CpU     Coprocessor unusable
+//                 0C Ov      Arithmetic overflow
+//                 0D-1F      Not used
+//  7     -      Not used (zero)
+//  8-15  Ip     Interrupt pending field. Bit 8 and 9 are R/W, and
+//               contain the last value written to them. As long
+//               as any of the bits are set they will cause an
+//               interrupt if the corresponding bit is set in IM.
+//  16-27 -      Not used (zero)
+//  28-29 CE     Contains the coprocessor number if the exception
+//               occurred because of a coprocessor instuction for
+//               a coprocessor which wasn't enabled in SR.
+//  30    -      Not used (zero)
+//  31    BD     Is set when last exception points to the
+//               branch instuction instead of the instruction
+//               in the branch delay slot, where the exception
+//               occurred.
+//
+// cop0r12 - SR - System status register (R/W)
+//
+//  0     IEc Current Interrupt Enable  (0=Disable, 1=Enable) ;rfe pops IUp here
+//  1     KUc Current Kernel/User Mode  (0=Kernel, 1=User)    ;rfe pops KUp here
+//  2     IEp Previous Interrupt Disable                      ;rfe pops IUo here
+//  3     KUp Previous Kernel/User Mode                       ;rfe pops KUo here
+//  4     IEo Old Interrupt Disable                       ;left unchanged by rfe
+//  5     KUo Old Kernel/User Mode                        ;left unchanged by rfe
+//  6-7   -   Not used (zero)
+//  8-15  Im  8 bit interrupt mask fields. When set the corresponding
+//            interrupts are allowed to cause an exception.
+//  16    Isc Isolate Cache (0=No, 1=Isolate)
+//              When isolated, all load and store operations are targetted
+//              to the Data cache, and never the main memory.
+//              (Used by PSX Kernel, in combination with Port FFFE0130h)
+//  17    Swc Swapped cache mode (0=Normal, 1=Swapped)
+//              Instruction cache will act as Data cache and vice versa.
+//              Use only with Isc to access & invalidate Instr. cache entries.
+//              (Not used by PSX Kernel)
+//  18    PZ  When set cache parity bits are written as 0.
+//  19    CM  Shows the result of the last load operation with the D-cache
+//            isolated. It gets set if the cache really contained data
+//            for the addressed memory location.
+//  20    PE  Cache parity error (Does not cause exception)
+//  21    TS  TLB shutdown. Gets set if a programm address simultaneously
+//            matches 2 TLB entries.
+//            (initial value on reset allows to detect extended CPU version?)
+//  22    BEV Boot exception vectors in RAM/ROM (0=RAM/KSEG0, 1=ROM/KSEG1)
+//  23-24 -   Not used (zero)
+//  25    RE  Reverse endianness   (0=Normal endianness, 1=Reverse endianness)
+//              Reverses the byte order in which data is stored in
+//              memory. (lo-hi -> hi-lo)
+//              (Affects only user mode, not kernel mode) (?)
+//              (The bit doesn't exist in PSX ?)
+//  26-27 -   Not used (zero)
+//  28    CU0 COP0 Enable (0=Enable only in Kernel Mode, 1=Kernel and User Mode)
+//  29    CU1 COP1 Enable (0=Disable, 1=Enable) (none in PSX)
+//  30    CU2 COP2 Enable (0=Disable, 1=Enable) (GTE in PSX)
+//  31    CU3 COP3 Enable (0=Disable, 1=Enable) (none in PSX)
+//
+//
+// From https://psx-spx.consoledev.net/cpuspecifications/#cop0-exception-handling
 
 #[derive(Debug)]
 pub enum InstructionOp {
@@ -448,6 +535,42 @@ impl From<u8> for Cop0Reg {
     }
 }
 
+pub enum Exception {
+    INT = 0x00,     // interrupt
+    MOD = 0x01,     // tlb modification
+    TLBL = 0x02,    // tlb load
+    TLBS = 0x03,    // tlb store
+    AdEL = 0x04,    // address error, data load/instruction fetch
+    AdES = 0x05,    // address error, data store
+    IBE = 0x06,     // bus error on instruction fetch
+    DBE = 0x07,     // bus error on data load/store
+    Syscall = 0x08, // system call instruction
+    BP = 0x09,      // break instruction
+    RI = 0x0A,      // reserved instruction
+    CpU = 0x0B,     // coprocessor unusable
+    Ov = 0x0C,      // arithmetic overflow
+}
+
+impl Exception {
+    pub fn get_excode(&self) -> u8 {
+        match (self) {
+            Exception::INT => 0x00,
+            Exception::MOD => 0x01,
+            Exception::TLBL => 0x02,
+            Exception::TLBS => 0x03,
+            Exception::AdEL => 0x04,
+            Exception::AdES => 0x05,
+            Exception::IBE => 0x06,
+            Exception::DBE => 0x07,
+            Exception::Syscall => 0x08,
+            Exception::BP => 0x09,
+            Exception::RI => 0x0A,
+            Exception::CpU => 0x0B,
+            Exception::Ov => 0x0C,
+        }
+    }
+}
+
 pub struct Cop0Register {
     bits: u32,
 }
@@ -462,23 +585,32 @@ impl Cop0Register {
     }
 
     pub fn get_isc(&self) -> bool {
-        // No writes to memory occur
+        // If cache isolated (disabled),
+        // no writes to memory occur
         (self.bits >> 16) == 0x1
+    }
+
+    pub fn set_excode(&mut self, value: u8) -> () {
+        // 5 bits: 2-6
+        assert!(value < 0x0D);
+        let masked_bits = self.bits & !0x7C;
+        let masked_value = (value & 0x1F) as u32;
+        self.bits = masked_bits | (masked_value << 2);
     }
 }
 
 pub struct Cop0Registers {
-    bpc: Cop0Register,       // Breakpoint on execute
-    bda: Cop0Register,       // Breakpoint on data access
-    tar: Cop0Register,       // Randomly memorized jump address
-    bad_vaddr: Cop0Register, // Bad virtual address value
-    bdam: Cop0Register,      // Data breakpoint mask
-    bpcm: Cop0Register,      // Execute breakpoint mask
-    epc: Cop0Register,       // Return address from trap
-    prid: Cop0Register,      // Processor ID
-    pub sr: Cop0Register,    // System status register
-    dcic: Cop0Register,      // Data cache invalidate by index
-    cause: Cop0Register,     // Interrumption cause
+    bpc: Cop0Register,       // 3: Breakpoint on execute
+    bda: Cop0Register,       // 5: Breakpoint on data access
+    tar: Cop0Register,       // 6: Randomly memorized jump address
+    dcic: Cop0Register,      // 7: Data cache invalidate by index
+    bad_vaddr: Cop0Register, // 8: Bad virtual address value
+    bdam: Cop0Register,      // 9: Data breakpoint mask
+    bpcm: Cop0Register,      // 11: Execute breakpoint mask
+    pub sr: Cop0Register,    // 12: System status register
+    pub cause: Cop0Register, // 13: Exception cause
+    epc: Cop0Register,       // 14: Return address from trap
+    prid: Cop0Register,      // 15: Processor ID
 }
 
 impl Cop0Registers {
@@ -518,5 +650,25 @@ impl Cop0Registers {
             Cop0Reg::SR => self.sr.bits = value,
             _ => panic!("Cop0 Register Write Error: {:?}", reg),
         }
+    }
+
+    pub fn dump(&self) -> () {
+        // bpc bda  tar   bad_vaddr bdam bpcm epc prid
+        // sr  dcic cause
+        println!(
+            "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
+            self.bpc.bits,
+            self.bda.bits,
+            self.tar.bits,
+            self.dcic.bits,
+            self.bad_vaddr.bits,
+            self.bdam.bits,
+            self.bpcm.bits,
+            self.sr.bits
+        );
+        println!(
+            "{:8x} {:8x} {:8x}",
+            self.cause.bits, self.epc.bits, self.prid.bits
+        );
     }
 }

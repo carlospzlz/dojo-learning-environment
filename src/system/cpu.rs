@@ -14,6 +14,7 @@ use crate::system::cpu_types::Cop0Instruction;
 use crate::system::cpu_types::Cop0Reg;
 use crate::system::cpu_types::Cop0Registers;
 use crate::system::cpu_types::CopCommonInstruction;
+use crate::system::cpu_types::Exception;
 use crate::system::cpu_types::Instruction;
 use crate::system::cpu_types::InstructionFunct;
 use crate::system::cpu_types::InstructionOp;
@@ -72,6 +73,7 @@ impl CPU {
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
             self.state.dump_registers();
+            self.state.dump_cop0_registers();
             println!("---");
             println!("RAM SHA-256: {}", bus.get_ram_hash());
             //bus.dump_ram();
@@ -126,6 +128,7 @@ impl CPU {
                     InstructionFunct::SRA => self.execute_sra(),
                     InstructionFunct::SRL => self.execute_srl(),
                     InstructionFunct::SUBU => self.execute_subu(),
+                    InstructionFunct::SYSCALL => self.execute_syscall(),
                     _ => todo!(
                         "FUNCT no implemented: {:?} (cycle={})",
                         instruction.get_funct(),
@@ -690,6 +693,10 @@ impl CPU {
         bus.access_memory::<WriteWord>(address, &mut rt_value, cache_is_isolated);
     }
 
+    fn execute_syscall(&mut self) -> () {
+        self.raise_exception(Exception::Syscall);
+    }
+
     // Coprocessor Instructions
 
     fn execute_cop0(&mut self) -> () {
@@ -741,6 +748,14 @@ impl CPU {
         let mode_bits = (mode_bits & 0b110000) | (mode_bits >> 2);
         self.state.cop0_registers.sr.set_mode_bits(mode_bits);
     }
+
+    // Exception handling
+
+    fn raise_exception(&mut self, exception: Exception) -> () {
+        // Make value for exception
+        let excode = exception.get_excode();
+        self.state.cop0_registers.cause.set_excode(excode);
+    }
 }
 
 impl State {
@@ -766,5 +781,9 @@ impl State {
 
     fn dump_registers(&self) -> () {
         self.registers.dump();
+    }
+
+    fn dump_cop0_registers(&self) -> () {
+        self.cop0_registers.dump();
     }
 }
