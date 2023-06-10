@@ -571,17 +571,19 @@ impl Exception {
     }
 }
 
-pub struct Cop0Register {
+pub struct Cop0SystemStatusRegister {
     bits: u32,
 }
 
-impl Cop0Register {
+impl Cop0SystemStatusRegister {
     pub fn get_mode_bits(&self) -> u8 {
         (self.bits & 0x3F) as u8
     }
 
     pub fn set_mode_bits(&mut self, mode_bits: u8) -> () {
-        self.bits = (self.bits & 0xFFFFFFC0) | (mode_bits as u32);
+        let masked_bits = self.bits & 0xFFFFFFC0;
+        let masked_mode_bits = (mode_bits as u32) & 0x3F;
+        self.bits = masked_bits | masked_mode_bits;
     }
 
     pub fn get_isc(&self) -> bool {
@@ -590,49 +592,65 @@ impl Cop0Register {
         (self.bits >> 16) == 0x1
     }
 
+    pub fn get_bev(&self) -> bool {
+        (self.bits << 22) == 0x1
+    }
+}
+
+pub struct Cop0CauseRegister {
+    bits: u32,
+}
+
+impl Cop0CauseRegister {
     pub fn set_excode(&mut self, value: u8) -> () {
         // 5 bits: 2-6
+        println!("Set excode {}", value);
         assert!(value < 0x0D);
         let masked_bits = self.bits & !0x7C;
         let masked_value = (value & 0x1F) as u32;
+        println!("{:b}", masked_bits);
+        println!("{:b}", masked_value);
         self.bits = masked_bits | (masked_value << 2);
+        println!("{:x}", self.bits);
     }
 }
 
 pub struct Cop0Registers {
-    bpc: Cop0Register,       // 3: Breakpoint on execute
-    bda: Cop0Register,       // 5: Breakpoint on data access
-    tar: Cop0Register,       // 6: Randomly memorized jump address
-    dcic: Cop0Register,      // 7: Data cache invalidate by index
-    bad_vaddr: Cop0Register, // 8: Bad virtual address value
-    bdam: Cop0Register,      // 9: Data breakpoint mask
-    bpcm: Cop0Register,      // 11: Execute breakpoint mask
-    pub sr: Cop0Register,    // 12: System status register
-    pub cause: Cop0Register, // 13: Exception cause
-    epc: Cop0Register,       // 14: Return address from trap
-    prid: Cop0Register,      // 15: Processor ID
+    bpc: u32,       // 3: Breakpoint on execute
+    bda: u32,       // 5: Breakpoint on data access
+    tar: u32,       // 6: Randomly memorized jump address
+    dcic: u32,      // 7: Data cache invalidate by index
+    bad_vaddr: u32, // 8: Bad virtual address value
+    bdam: u32,      // 9: Data breakpoint mask
+    bpcm: u32,      // 11: Execute breakpoint mask
+    pub sr: Cop0SystemStatusRegister,    // 12: System status register
+    pub cause: Cop0CauseRegister, // 13: Exception cause
+    pub epc: u32,            // 14: Return address from trap (Exception Program Counter)
+    prid: u32,      // 15: Processor ID
 }
 
 impl Cop0Registers {
     pub fn new() -> Self {
         Self {
-            bpc: Cop0Register { bits: 0 },
-            bda: Cop0Register { bits: 0 },
-            tar: Cop0Register { bits: 0 },
-            bad_vaddr: Cop0Register { bits: 0 },
-            bdam: Cop0Register { bits: 0 },
-            bpcm: Cop0Register { bits: 0 },
-            epc: Cop0Register { bits: 0 },
-            prid: Cop0Register { bits: 0 },
-            sr: Cop0Register { bits: 0 },
-            dcic: Cop0Register { bits: 0 },
-            cause: Cop0Register { bits: 0 },
+            bpc: 0x0,
+            bda: 0x0,
+            tar: 0x0,
+            bad_vaddr: 0x0,
+            bdam: 0x0,
+            bpcm: 0x0,
+            epc: 0x0,
+            prid: 0x0,
+            sr: Cop0SystemStatusRegister { bits: 0 },
+            dcic: 0x0,
+            cause: Cop0CauseRegister { bits: 0 },
         }
     }
 
     pub fn read_register(&self, reg: Cop0Reg) -> u32 {
         match reg {
-            Cop0Reg::BPC => self.bpc.bits,
+            Cop0Reg::BPC => self.bpc,
+            Cop0Reg::CAUSE => self.cause.bits,
+            Cop0Reg::EPC => self.epc,
             Cop0Reg::SR => self.sr.bits,
             _ => panic!("Cop0 Register Read Error: {:?}", reg),
         }
@@ -640,13 +658,13 @@ impl Cop0Registers {
 
     pub fn write_register(&mut self, reg: Cop0Reg, value: u32) -> () {
         match reg {
-            Cop0Reg::BDA => self.bda.bits = value,
-            Cop0Reg::BDAM => self.bdam.bits = value,
-            Cop0Reg::BPC => self.bpc.bits = value,
-            Cop0Reg::BPCM => self.bpcm.bits = value,
+            Cop0Reg::BDA => self.bda = value,
+            Cop0Reg::BDAM => self.bdam = value,
+            Cop0Reg::BPC => self.bpc = value,
+            Cop0Reg::BPCM => self.bpcm = value,
             Cop0Reg::CAUSE => self.cause.bits = value,
-            Cop0Reg::DCIC => self.dcic.bits = value,
-            Cop0Reg::JUMPDEST => self.tar.bits = value,
+            Cop0Reg::DCIC => self.dcic = value,
+            Cop0Reg::JUMPDEST => self.tar = value,
             Cop0Reg::SR => self.sr.bits = value,
             _ => panic!("Cop0 Register Write Error: {:?}", reg),
         }
@@ -657,18 +675,18 @@ impl Cop0Registers {
         // sr  dcic cause
         println!(
             "{:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x} {:8x}",
-            self.bpc.bits,
-            self.bda.bits,
-            self.tar.bits,
-            self.dcic.bits,
-            self.bad_vaddr.bits,
-            self.bdam.bits,
-            self.bpcm.bits,
+            self.bpc,
+            self.bda,
+            self.tar,
+            self.dcic,
+            self.bad_vaddr,
+            self.bdam,
+            self.bpcm,
             self.sr.bits
         );
         println!(
             "{:8x} {:8x} {:8x}",
-            self.cause.bits, self.epc.bits, self.prid.bits
+            self.cause.bits, self.epc, self.prid
         );
     }
 }

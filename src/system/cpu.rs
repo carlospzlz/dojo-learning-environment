@@ -34,6 +34,7 @@ pub struct CPU {
 
 struct State {
     cycle: usize,
+    current_instruction_pc: u32,
     instruction: Instruction,
     registers: Registers,
     cop0_registers: Cop0Registers,
@@ -64,6 +65,7 @@ impl CPU {
     }
 
     pub fn execute(&mut self, bus: &mut Bus) -> Result<(), String> {
+        self.state.current_instruction_pc = self.state.registers.pc;
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
 
@@ -90,16 +92,15 @@ impl CPU {
         Ok(())
     }
 
-    fn fetch_instruction(&mut self, bus: &mut Bus) -> Result<(), String> {
+    fn fetch_instruction(&mut self, bus: &mut Bus) -> () {
         let address = self.state.registers.pc;
         let bits = bus.fetch_instruction(address);
         self.state.instruction.bits = bits;
         self.state.registers.pc = self.state.registers.npc;
         self.state.registers.npc += std::mem::size_of::<u32>() as u32;
-        Ok(())
     }
 
-    fn execute_instruction(&mut self, bus: &mut Bus) -> Result<(), String> {
+    fn execute_instruction(&mut self, bus: &mut Bus) -> () {
         let instruction = &self.state.instruction;
         info!(
             "[Cycle={}] {:x}  {} ({:?})",
@@ -128,7 +129,7 @@ impl CPU {
                     InstructionFunct::SRA => self.execute_sra(),
                     InstructionFunct::SRL => self.execute_srl(),
                     InstructionFunct::SUBU => self.execute_subu(),
-                    InstructionFunct::SYSCALL => self.execute_syscall(),
+                    InstructionFunct::SYSCALL => self.execute_syscall(bus),
                     _ => todo!(
                         "FUNCT no implemented: {:?} (cycle={})",
                         instruction.get_funct(),
@@ -170,7 +171,6 @@ impl CPU {
 
             _ => todo!("OP not implemented: {:?}", instruction.get_op_code()),
         };
-        Ok(())
     }
 
     fn execute_addi(&mut self) -> () {
@@ -693,8 +693,8 @@ impl CPU {
         bus.access_memory::<WriteWord>(address, &mut rt_value, cache_is_isolated);
     }
 
-    fn execute_syscall(&mut self) -> () {
-        self.raise_exception(Exception::Syscall);
+    fn execute_syscall(&mut self, bus: &mut Bus) -> () {
+        self.raise_exception(Exception::Syscall, bus);
     }
 
     // Coprocessor Instructions
@@ -751,10 +751,37 @@ impl CPU {
 
     // Exception handling
 
-    fn raise_exception(&mut self, exception: Exception) -> () {
+    fn raise_exception(&mut self, exception: Exception, bus: &mut Bus) -> () {
+        self.state.cop0_registers.epc = self.state.current_instruction_pc;
+
         // Make value for exception
         let excode = exception.get_excode();
         self.state.cop0_registers.cause.set_excode(excode);
+
+        // If exception happens in branch delay, but for this implementation
+        // this shouldn't happen
+
+        // (IEc, KUc) -> (IEp, KUp)
+        let mode_bits = self.state.cop0_registers.sr.get_mode_bits();
+        self.state.cop0_registers.sr.set_mode_bits(mode_bits << 2);
+
+        // Update NPC
+        let boot_exception_vector = self.state.cop0_registers.sr.get_bev();
+        let base = if boot_exception_vector {0xbfc00100} else {0x80000000};
+        let vector = base | 0x00000080;
+        self.state.registers.npc = vector;
+
+        // Flush the pipeline
+        self.flush_pipeline(bus);
+    }
+
+    fn flush_pipeline(&mut self, bus: &mut Bus) {
+        // Clear all load delays
+
+        // Not in a Branch Delay slot
+
+        // Prefetch next instruction
+        self.fetch_instruction(bus);
     }
 }
 
@@ -763,6 +790,7 @@ impl State {
         Self {
             cycle: 0,
             instruction: Instruction::new(),
+            current_instruction_pc: 0,
             registers: Registers::new(),
             cop0_registers: Cop0Registers::new(),
             frame_done: false,
@@ -775,6 +803,7 @@ impl State {
 
     fn dump_header(&self) -> () {
         println!("* Cycle {}", self.cycle);
+        println!("Current Instruction PC={:x}", self.current_instruction_pc);
         println!("PC={:x} NPC={:x}", self.registers.pc, self.registers.npc);
         println!("Inst={:x}", self.instruction.bits);
     }
