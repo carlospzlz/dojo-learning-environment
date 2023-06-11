@@ -6,6 +6,7 @@ use crate::system::bios::BIOS_MASK;
 use crate::system::bios::BIOS_SIZE;
 use crate::system::bus::Bus;
 use crate::system::bus::ReadByte;
+use crate::system::bus::ReadHalfWord;
 use crate::system::bus::ReadWord;
 use crate::system::bus::WriteByte;
 use crate::system::bus::WriteHalfWord;
@@ -70,7 +71,8 @@ impl CPU {
         self.execute_instruction(bus);
 
         // 130000 - 135000
-        let start = 2695600;
+        //let start = 12695600;
+        let start = 10000000;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
@@ -122,8 +124,11 @@ impl CPU {
                     InstructionFunct::JR => self.execute_jr(),
                     InstructionFunct::MFHI => self.execute_mfhi(),
                     InstructionFunct::MFLO => self.execute_mflo(),
+                    InstructionFunct::MTHI => self.execute_mthi(),
+                    InstructionFunct::MTLO => self.execute_mtlo(),
                     InstructionFunct::OR => self.execute_or(),
                     InstructionFunct::SLL => self.execute_sll(),
+                    InstructionFunct::SLLV => self.execute_sllv(),
                     InstructionFunct::SLT => self.execute_slt(),
                     InstructionFunct::SLTU => self.execute_sltu(),
                     InstructionFunct::SRA => self.execute_sra(),
@@ -148,6 +153,8 @@ impl CPU {
             InstructionOp::COP0 => self.execute_cop0(),
             InstructionOp::LB => self.execute_lb(bus),
             InstructionOp::LBU => self.execute_lbu(bus),
+            InstructionOp::LH => self.execute_lh(bus),
+            InstructionOp::LHU => self.execute_lhu(bus),
             InstructionOp::LUI => self.execute_lui(),
             InstructionOp::LW => self.execute_lw(bus),
             InstructionOp::J => self.execute_j(),
@@ -169,7 +176,11 @@ impl CPU {
             InstructionOp::SWC1 => {}
             InstructionOp::SWC3 => {}
 
-            _ => todo!("OP not implemented: {:?}", instruction.get_op_code()),
+            _ => todo!(
+                "OP not implemented: {:?} (cycle={}",
+                instruction.get_op_code(),
+                self.state.cycle
+            ),
         };
     }
 
@@ -180,7 +191,7 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
         debug!("ADDI rt={}, rs={}, immediate={}", rt, rs, immediate);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let sext_immediate = immediate as i16 as i32;
         let result = ((rs_value as i32) + sext_immediate) as u32;
         self.state.registers.write_register(rt, result as u32);
@@ -193,7 +204,7 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
         debug!("ADDI rt={}, rs={}, immediate={}", rt, rs, immediate);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let sext_immediate = immediate as i16 as i32;
         //  While ADDI triggers an exception on overflow, ADDIU performs an
         //  unsigned wraparound on overflow
@@ -207,7 +218,7 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
         debug!("[rt={}, rs={}, immediate={}]", rt, rs, immediate);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let result = rs_value & (immediate as u32);
         self.state.registers.write_register(rt, result);
     }
@@ -218,8 +229,8 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("[rd={}, rs={}, rt={}]", rd, rt, rs);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
         let result = rs_value + rt_value;
         self.state.registers.write_register(rd, result);
     }
@@ -230,8 +241,8 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("[rd={}, rs={}, rt={}]", rd, rt, rs);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
         let result = rs_value + rt_value;
         self.state.registers.write_register(rd, result);
     }
@@ -242,8 +253,8 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let rs = self.state.instruction.get_rs();
         debug!("AND rd={} rt={}, rs={}", rd, rt, rs);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rt_value = self.state.registers.read_register(rt);
+        let rs_value = self.state.registers.read_register(rs);
         let result = rs_value & rt_value;
         self.state.registers.write_register(rd, result);
     }
@@ -278,7 +289,7 @@ impl CPU {
         }
 
         // Jump
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let is_bgez = (rt & 1) == 1;
         // XOR, these two must conditions be different
         // (from duckstation, pretty smart)
@@ -297,8 +308,8 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let offset = self.state.instruction.get_offset();
         debug!("[rs={}, rt={}, offset={}]", rs, rt, offset);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
         if rs_value == rt_value {
             // Sign extend to i32
             let offset = (offset as i16 as i32) << 2;
@@ -313,7 +324,7 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let offset = self.state.instruction.get_offset();
         debug!("BGTZ rs={}, offset={}]", rs, offset);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         if rs_value > 0 {
             // Sign extend to i32
             let offset = (offset as i16 as i32) << 2;
@@ -328,7 +339,7 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let offset = self.state.instruction.get_offset();
         debug!("BGTZ rs={}, offset={}]", rs, offset);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         if rs_value <= 0 {
             // Sign extend to i32
             let offset = (offset as i16 as i32) << 2;
@@ -345,8 +356,8 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let offset = self.state.instruction.get_offset();
         debug!("BNE rs={}, rt={}, offset={}", rs, rt, offset);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
         if rs_value != rt_value {
             // Sign extend to i32
             let offset = (offset as i16 as i32) << 2;
@@ -365,8 +376,8 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("DIV rs={}, rt={}", rs, rt);
-        let num = self.state.registers.read_register(rs).unwrap() as i32;
-        let denom = self.state.registers.read_register(rt).unwrap() as i32;
+        let num = self.state.registers.read_register(rs) as i32;
+        let denom = self.state.registers.read_register(rt) as i32;
         if denom == 0 {
             // Divide by zero
             self.state.registers.lo = if num >= 0 { 0xFFFFFFFF } else { 0x1 };
@@ -390,8 +401,8 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("DIV rs={}, rt={}", rs, rt);
-        let num = self.state.registers.read_register(rs).unwrap();
-        let denom = self.state.registers.read_register(rt).unwrap();
+        let num = self.state.registers.read_register(rs);
+        let denom = self.state.registers.read_register(rt);
         if denom == 0 {
             // Divide by zero
             self.state.registers.lo = 0xFFFFFFFF;
@@ -436,14 +447,14 @@ impl CPU {
             .registers
             .write_register(rd, self.state.registers.npc);
         // Jump
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         self.state.registers.npc = rs_value;
     }
 
     fn execute_jr(&mut self) -> () {
         // JR rs
         let rs = self.state.instruction.get_rs();
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         debug!("[rs={}]", rs);
         self.state.registers.npc = rs_value;
     }
@@ -454,7 +465,7 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
-        let base_value = self.state.registers.read_register(base).unwrap();
+        let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value: u32 = u32::default();
@@ -470,12 +481,47 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
-        let base_value = self.state.registers.read_register(base).unwrap();
+        let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value = u32::default();
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
         bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated);
+        self.state.registers.write_register(rt, value);
+    }
+
+    fn execute_lh(&mut self, bus: &mut Bus) -> () {
+        // Load Half-word
+        // LB rt, offset(base)
+        let rt = self.state.instruction.get_rt();
+        let base = self.state.instruction.get_base();
+        let offset = self.state.instruction.get_offset();
+        debug!("LH rt={}, base={}, offset={}", rt, base, offset);
+        let base_value = self.state.registers.read_register(base);
+        let sext_offset = offset as i16 as i32;
+        let address = ((base_value as i32) + sext_offset) as u32;
+        let mut value: u32 = u32::default();
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<ReadHalfWord>(address, &mut value, cache_is_isolated);
+        let sext_value = ((value & 0xFFFF) as i16 as i32) as u32;
+        self.state.registers.write_register(rt, sext_value);
+    }
+
+
+    fn execute_lhu(&mut self, bus: &mut Bus) -> () {
+        // Load Half-word Unsigned
+        // LHU rt, offset(base)
+        // Unsigned -> Zero extending the value
+        let rt = self.state.instruction.get_rt();
+        let base = self.state.instruction.get_base();
+        let offset = self.state.instruction.get_offset();
+        debug!("LHU rt={}, base{}, offset={}", rt, base, offset);
+        let base_value = self.state.registers.read_register(base);
+        let sext_offset = offset as i16 as i32;
+        let address = ((base_value as i32) + sext_offset) as u32;
+        let mut value = u32::default();
+        let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
+        bus.access_memory::<ReadHalfWord>(address, &mut value, cache_is_isolated);
         self.state.registers.write_register(rt, value);
     }
 
@@ -494,7 +540,7 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
-        let base_value = self.state.registers.read_register(base).unwrap();
+        let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut word: u32 = 0;
@@ -504,6 +550,7 @@ impl CPU {
     }
 
     fn execute_mfhi(&mut self) -> () {
+        // Move From HIgh
         // MFHI rd
         let rd = self.state.instruction.get_rd();
         debug!("MFHI rd={}", rd);
@@ -512,11 +559,30 @@ impl CPU {
     }
 
     fn execute_mflo(&mut self) -> () {
+        // Move From LOw
         // MFLO rd
         let rd = self.state.instruction.get_rd();
         debug!("MFLO rd={}", rd);
         let lo_value = self.state.registers.lo;
         self.state.registers.write_register(rd, lo_value);
+    }
+
+    fn execute_mthi(&mut self) -> () {
+        // Move To HIgh
+        // MTHI rs
+        let rs = self.state.instruction.get_rs();
+        debug!("MTHI rs={}", rs);
+        let hi_value = self.state.registers.read_register(rs);
+        self.state.registers.hi = hi_value;
+    }
+
+    fn execute_mtlo(&mut self) -> () {
+        // Move To LOw
+        // MTLO rs
+        let rs = self.state.instruction.get_rs();
+        debug!("MTLO rs={}", rs);
+        let lo_value = self.state.registers.read_register(rs);
+        self.state.registers.lo = lo_value;
     }
 
     fn execute_or(&mut self) -> () {
@@ -525,8 +591,8 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let rs = self.state.instruction.get_rs();
         debug!("[rd={}, rt={}, rs={}]", rd, rt, rs);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rt_value = self.state.registers.read_register(rt);
+        let rs_value = self.state.registers.read_register(rs);
         let result = rt_value | rs_value;
         self.state.registers.write_register(rd, result);
     }
@@ -537,7 +603,7 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let immediate = self.state.instruction.get_immediate();
         debug!("[rt={}, rs={}, immediate={}]", rt, rs, immediate);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let result = rs_value | (immediate as u32);
         self.state.registers.write_register(rt, result);
     }
@@ -548,8 +614,22 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let shamt = self.state.instruction.get_shamt();
         debug!("[rd={}, rt={}, shamt={}]", rd, rt, shamt);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rt_value = self.state.registers.read_register(rt);
         let result = rt_value << shamt;
+        self.state.registers.write_register(rd, result);
+    }
+
+    fn execute_sllv(&mut self) -> () {
+        // Shift Left Logical Variable
+        // SLLV rd, rt, rs
+        // Uses registers content as shift, rather than immediate as SLL
+        let rd = self.state.instruction.get_rd();
+        let rt = self.state.instruction.get_rt();
+        let rs = self.state.instruction.get_rs();
+        debug!("SLLV rd={}, rt={}, shamt={}]", rd, rt, rs);
+        let rt_value = self.state.registers.read_register(rt);
+        let rs_value = self.state.registers.read_register(rs);
+        let result = rt_value << rs_value;
         self.state.registers.write_register(rd, result);
     }
 
@@ -560,8 +640,8 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("SLT rd={}, rs={}, rt={}", rd, rs, rt);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
         let result = ((rs_value as i32) < (rt_value as i32)) as u32;
         self.state.registers.write_register(rd, result);
     }
@@ -573,7 +653,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let immediate = self.state.instruction.get_immediate();
         debug!("SLTI rs={}, rt={}, immediate={}", rs, rt, immediate);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let sext_immediate = immediate as i16 as i32;
         let result = ((rs_value as i32) < sext_immediate) as u32;
         self.state.registers.write_register(rt, result);
@@ -586,7 +666,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let immediate = self.state.instruction.get_immediate();
         debug!("SLTI rs={}, rt={} immediate={}", rs, rt, immediate);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
         let sext_immediate = immediate as i16 as i32;
         let result = (rs_value < (sext_immediate as u32)) as u32;
         self.state.registers.write_register(rt, result);
@@ -599,8 +679,8 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("[rd={}, rs={}, rt={}]", rd, rs, rt);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
         let result = (rs_value < rt_value) as u32;
         self.state.registers.write_register(rd, result);
     }
@@ -612,7 +692,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let shamt = self.state.instruction.get_shamt();
         debug!("SRA rd={}, rt={}, shamt={}", rd, rt, shamt);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rt_value = self.state.registers.read_register(rt);
         let result = ((rt_value as i32) >> shamt) as u32;
         self.state.registers.write_register(rd, result);
     }
@@ -624,7 +704,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let shamt = self.state.instruction.get_shamt();
         debug!("SRL rd={}, rt={}, shamt={}", rd, rt, shamt);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rt_value = self.state.registers.read_register(rt);
         let result = rt_value >> shamt;
         self.state.registers.write_register(rd, result);
     }
@@ -636,10 +716,10 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
-        let base_value = self.state.registers.read_register(base).unwrap();
+        let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
-        let ts_value = self.state.registers.read_register(rt).unwrap();
+        let ts_value = self.state.registers.read_register(rt);
         let mut value = ts_value & 0x000000FF;
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
         bus.access_memory::<WriteByte>(address, &mut value, cache_is_isolated);
@@ -652,10 +732,10 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         debug!("[rt={}, offset={}]", rt, offset);
-        let base_value = self.state.registers.read_register(base).unwrap();
+        let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
-        let ts_value = self.state.registers.read_register(rt).unwrap();
+        let ts_value = self.state.registers.read_register(rt);
         let mut value = ts_value & 0x0000FFFF;
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
         bus.access_memory::<WriteHalfWord>(address, &mut value, cache_is_isolated);
@@ -668,9 +748,9 @@ impl CPU {
         let rs = self.state.instruction.get_rs();
         let rt = self.state.instruction.get_rt();
         debug!("SUBU rd={}, rs={}, rt={}", rd, rs, rt);
-        let rs_value = self.state.registers.read_register(rs).unwrap();
-        let rt_value = self.state.registers.read_register(rt).unwrap();
-        let result = rs_value - rt_value;
+        let rs_value = self.state.registers.read_register(rs);
+        let rt_value = self.state.registers.read_register(rt);
+        let result = rs_value.wrapping_sub(rt_value);
         self.state.registers.write_register(rd, result);
     }
 
@@ -681,10 +761,10 @@ impl CPU {
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
         info!("[rt={}, offset={}]", rt, offset);
-        let base_value = self.state.registers.read_register(base).unwrap();
+        let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
-        let mut rt_value = self.state.registers.read_register(rt).unwrap();
+        let mut rt_value = self.state.registers.read_register(rt);
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
         info!(
             "Base: {:x} Offset: {:x} Address: {:x}",
@@ -737,7 +817,7 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let cop0_reg = Cop0Reg::from(self.state.instruction.get_rd());
         debug!("COP{} rt={}, rd={:?}]", cop_number, rt, cop0_reg);
-        let rt_value = self.state.registers.read_register(rt).unwrap();
+        let rt_value = self.state.registers.read_register(rt);
         self.state.cop0_registers.write_register(cop0_reg, rt_value)
     }
 
@@ -767,7 +847,11 @@ impl CPU {
 
         // Update NPC
         let boot_exception_vector = self.state.cop0_registers.sr.get_bev();
-        let base = if boot_exception_vector {0xbfc00100} else {0x80000000};
+        let base = if boot_exception_vector {
+            0xbfc00100
+        } else {
+            0x80000000
+        };
         let vector = base | 0x00000080;
         self.state.registers.npc = vector;
 

@@ -462,8 +462,8 @@ impl Registers {
         }
     }
 
-    pub fn read_register(&self, index: u8) -> Result<u32, String> {
-        Ok(self.gprs[index as usize])
+    pub fn read_register(&self, index: u8) -> u32 {
+        self.gprs[index as usize]
     }
 
     pub fn write_register(&mut self, index: u8, value: u32) -> () {
@@ -616,17 +616,17 @@ impl Cop0CauseRegister {
 }
 
 pub struct Cop0Registers {
-    bpc: u32,       // 3: Breakpoint on execute
-    bda: u32,       // 5: Breakpoint on data access
-    tar: u32,       // 6: Randomly memorized jump address
-    dcic: u32,      // 7: Data cache invalidate by index
-    bad_vaddr: u32, // 8: Bad virtual address value
-    bdam: u32,      // 9: Data breakpoint mask
-    bpcm: u32,      // 11: Execute breakpoint mask
-    pub sr: Cop0SystemStatusRegister,    // 12: System status register
-    pub cause: Cop0CauseRegister, // 13: Exception cause
-    pub epc: u32,            // 14: Return address from trap (Exception Program Counter)
-    prid: u32,      // 15: Processor ID
+    bpc: u32,                         // 3: Breakpoint on execute
+    bda: u32,                         // 5: Breakpoint on data access
+    tar: u32,                         // 6: Randomly memorized jump address
+    dcic: u32,                        // 7: Data cache invalidate by index
+    bad_vaddr: u32,                   // 8: Bad virtual address value
+    bdam: u32,                        // 9: Data breakpoint mask
+    bpcm: u32,                        // 11: Execute breakpoint mask
+    pub sr: Cop0SystemStatusRegister, // 12: System status register
+    pub cause: Cop0CauseRegister,     // 13: Exception cause
+    pub epc: u32,                     // 14: Return address from trap (Exception Program Counter)
+    prid: u32,                        // 15: Processor ID
 }
 
 impl Cop0Registers {
@@ -684,9 +684,6 @@ impl Cop0Registers {
             self.bpcm,
             self.sr.bits
         );
-        println!(
-            "{:8x} {:8x} {:8x}",
-            self.cause.bits, self.epc, self.prid
-        );
+        println!("{:8x} {:8x} {:8x}", self.cause.bits, self.epc, self.prid);
     }
 }
