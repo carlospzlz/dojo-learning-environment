@@ -604,14 +604,10 @@ pub struct Cop0CauseRegister {
 impl Cop0CauseRegister {
     pub fn set_excode(&mut self, value: u8) -> () {
         // 5 bits: 2-6
-        println!("Set excode {}", value);
         assert!(value < 0x0D);
         let masked_bits = self.bits & !0x7C;
         let masked_value = (value & 0x1F) as u32;
-        println!("{:b}", masked_bits);
-        println!("{:b}", masked_value);
         self.bits = masked_bits | (masked_value << 2);
-        println!("{:x}", self.bits);
     }
 }
 

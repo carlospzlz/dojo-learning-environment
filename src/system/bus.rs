@@ -102,9 +102,9 @@ mod memory_map {
     //const MDEC_BASE = 0x1F801820,
     //const MDEC_SIZE = 0x10,
     //const MDEC_MASK = MDEC_SIZE - 1,
-    //const SPU_BASE = 0x1F801C00,
-    //const SPU_SIZE = 0x400,
-    //const SPU_MASK = 0x3FF,
+    pub const SPU_BASE: u32 = 0x1F801C00;
+    pub const SPU_SIZE: u32 = 0x400;
+    pub const SPU_MASK: u32 = SPU_SIZE - 1;
     //const EXP2_BASE = 0x1F802000,
     //const EXP2_SIZE = 0x2000,
     //const EXP2_MASK = EXP2_SIZE - 1,
@@ -638,8 +638,11 @@ impl Bus {
             panic!("Invalid Address: EXP1 < address < MEMCTRL_BASE");
         } else if address < (memory_map::MEMCTRL_BASE + memory_map::MEMCTRL_SIZE) {
             T::do_memory_control_access(address, value, self)
+        } else if address < (memory_map::SPU_BASE + memory_map::SPU_SIZE) {
+            warn!("SPU access");
+            0
         } else {
-            debug!("Writing memory");
+            warn!("Other Memory Access");
             0
         }
     }

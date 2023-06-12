@@ -70,9 +70,8 @@ impl CPU {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
 
-        // 130000 - 135000
-        //let start = 12695600;
-        let start = 10000000;
+        //let start = 12763740;
+        let start = 12766700;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
@@ -104,7 +103,7 @@ impl CPU {
 
     fn execute_instruction(&mut self, bus: &mut Bus) -> () {
         let instruction = &self.state.instruction;
-        info!(
+        debug!(
             "[Cycle={}] {:x}  {} ({:?})",
             self.state.cycle,
             instruction.bits,
@@ -335,11 +334,13 @@ impl CPU {
     }
 
     fn execute_blez(&mut self) -> () {
+        // Branch on Less or Equal than Zero
         // BLEZ rs, offset
+        // Signed comparison
         let rs = self.state.instruction.get_rs();
         let offset = self.state.instruction.get_offset();
-        debug!("BGTZ rs={}, offset={}]", rs, offset);
-        let rs_value = self.state.registers.read_register(rs);
+        debug!("BLEZ rs={}, offset={}]", rs, offset);
+        let rs_value = self.state.registers.read_register(rs) as i32;
         if rs_value <= 0 {
             // Sign extend to i32
             let offset = (offset as i16 as i32) << 2;
