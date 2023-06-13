@@ -2,6 +2,7 @@ mod bios;
 mod bus;
 mod cpu;
 mod cpu_types;
+mod interrupt_controller;
 
 use bios::Bios;
 use bus::Bus;

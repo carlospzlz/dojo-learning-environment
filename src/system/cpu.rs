@@ -80,6 +80,7 @@ impl CPU {
             println!("RAM SHA-256: {}", bus.get_ram_hash());
             //bus.dump_ram();
             //bus.dump_mem_ctrl_registers();
+            bus.dump_interrupt_controller_registers();
             println!();
         }
 
