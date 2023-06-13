@@ -75,42 +75,42 @@ mod memory_map {
     pub const MEMCTRL_BASE: u32 = 0x1F801000;
     pub const MEMCTRL_SIZE: u32 = 0x40; // 64 KB
     pub const MEMCTRL_MASK: u32 = MEMCTRL_SIZE - 1;
-    //const PAD_BASE = 0x1F801040,
-    //const PAD_SIZE = 0x10,
-    //const PAD_MASK = PAD_SIZE - 1,
-    //const SIO_BASE = 0x1F801050,
-    //const SIO_SIZE = 0x10,
-    //const SIO_MASK = SIO_SIZE - 1,
-    //const MEMCTRL2_BASE = 0x1F801060,
-    //const MEMCTRL2_SIZE = 0x10,
-    //const MEMCTRL2_MASK = MEMCTRL2_SIZE - 1,
-    //const INTERRUPT_CONTROLLER_BASE = 0x1F801070,
-    //const INTERRUPT_CONTROLLER_SIZE = 0x10,
-    //const INTERRUPT_CONTROLLER_MASK = INTERRUPT_CONTROLLER_SIZE - 1,
-    //const DMA_BASE = 0x1F801080,
-    //const DMA_SIZE = 0x80,
-    //const DMA_MASK = DMA_SIZE - 1,
-    //const TIMERS_BASE = 0x1F801100,
-    //const TIMERS_SIZE = 0x40,
-    //const TIMERS_MASK = TIMERS_SIZE - 1,
-    //const CDROM_BASE = 0x1F801800,
-    //const CDROM_SIZE = 0x10,
-    //const CDROM_MASK = CDROM_SIZE - 1,
-    //const GPU_BASE = 0x1F801810,
-    //const GPU_SIZE = 0x10,
-    //const GPU_MASK = GPU_SIZE - 1,
-    //const MDEC_BASE = 0x1F801820,
-    //const MDEC_SIZE = 0x10,
-    //const MDEC_MASK = MDEC_SIZE - 1,
+    pub const PAD_BASE: u32 = 0x1F801040;
+    pub const PAD_SIZE: u32 = 0x10;
+    pub const PAD_MASK: u32 = PAD_SIZE - 1;
+    pub const SIO_BASE: u32 = 0x1F801050;
+    pub const SIO_SIZE: u32 = 0x10;
+    pub const SIO_MASK: u32 = SIO_SIZE - 1;
+    pub const MEMCTRL2_BASE: u32 = 0x1F801060;
+    pub const MEMCTRL2_SIZE: u32 = 0x10;
+    pub const MEMCTRL2_MASK: u32 = MEMCTRL2_SIZE - 1;
+    pub const INTERRUPT_CONTROLLER_BASE: u32 = 0x1F801070;
+    pub const INTERRUPT_CONTROLLER_SIZE: u32 = 0x10;
+    pub const INTERRUPT_CONTROLLER_MASK: u32 = INTERRUPT_CONTROLLER_SIZE - 1;
+    pub const DMA_BASE: u32 = 0x1F801080;
+    pub const DMA_SIZE: u32 = 0x80;
+    pub const DMA_MASK: u32 = DMA_SIZE - 1;
+    pub const TIMERS_BASE: u32 = 0x1F801100;
+    pub const TIMERS_SIZE: u32 = 0x40;
+    pub const TIMERS_MASK: u32 = TIMERS_SIZE - 1;
+    pub const CDROM_BASE: u32 = 0x1F801800;
+    pub const CDROM_SIZE: u32 = 0x10;
+    pub const CDROM_MASK: u32 = CDROM_SIZE - 1;
+    pub const GPU_BASE: u32 = 0x1F801810;
+    pub const GPU_SIZE: u32 = 0x10;
+    pub const GPU_MASK: u32 = GPU_SIZE - 1;
+    pub const MDEC_BASE: u32 = 0x1F801820;
+    pub const MDEC_SIZE: u32 = 0x10;
+    pub const MDEC_MASK: u32 = MDEC_SIZE - 1;
     pub const SPU_BASE: u32 = 0x1F801C00;
     pub const SPU_SIZE: u32 = 0x400;
     pub const SPU_MASK: u32 = SPU_SIZE - 1;
-    //const EXP2_BASE = 0x1F802000,
-    //const EXP2_SIZE = 0x2000,
-    //const EXP2_MASK = EXP2_SIZE - 1,
-    //const EXP3_BASE = 0x1FA00000,
-    //const EXP3_SIZE = 0x1,
-    //const EXP3_MASK = EXP3_SIZE - 1,
+    pub const EXP2_BASE: u32 = 0x1F802000;
+    pub const EXP2_SIZE: u32 = 0x2000;
+    pub const EXP2_MASK: u32 = EXP2_SIZE - 1;
+    pub const EXP3_BASE: u32 = 0x1FA00000;
+    pub const EXP3_SIZE: u32 = 0x1;
+    pub const EXP3_MASK: u32 = EXP3_SIZE - 1;
     pub const BIOS_BASE: u32 = 0x1FC00000;
     pub const BIOS_SIZE: u32 = 0x80000; // 512 KB
     pub const BIOS_MASK: u32 = BIOS_SIZE - 1;
@@ -637,13 +637,51 @@ impl Bus {
         } else if address < memory_map::MEMCTRL_BASE {
             panic!("Invalid Address: EXP1 < address < MEMCTRL_BASE");
         } else if address < (memory_map::MEMCTRL_BASE + memory_map::MEMCTRL_SIZE) {
+            warn!("Memory Access: MEMCTRL");
             T::do_memory_control_access(address, value, self)
+        } else if address < (memory_map::PAD_BASE + memory_map::PAD_SIZE) {
+            panic!("Memory Access: PAD");
+        } else if address < (memory_map::SIO_BASE + memory_map::SIO_SIZE) {
+            panic!("Memory Access: SIO");
+        } else if address < (memory_map::MEMCTRL2_BASE + memory_map::MEMCTRL2_SIZE) {
+            warn!("Memory Access: MEMCTRL2");
+            0
+        } else if address
+            < (memory_map::INTERRUPT_CONTROLLER_BASE + memory_map::INTERRUPT_CONTROLLER_SIZE)
+        {
+            error!("Memory Access: INTERRUPT_CONTROLLER");
+            0
+        } else if address < (memory_map::DMA_BASE + memory_map::DMA_SIZE) {
+            warn!("Memory Access: DMA");
+            0
+        } else if address < (memory_map::TIMERS_BASE + memory_map::TIMERS_SIZE) {
+            warn!("Memory Access: TIMERS");
+            0
+        } else if address < memory_map::CDROM_BASE {
+            panic!("Invalid Address: TIMERS < address < CDROM");
+        } else if address < (memory_map::CDROM_BASE + memory_map::CDROM_SIZE) {
+            panic!("Memory Access: CDROM");
+        } else if address < (memory_map::GPU_BASE + memory_map::GPU_SIZE) {
+            warn!("Memory Access: GPU");
+            0
+        } else if address < (memory_map::MDEC_BASE + memory_map::MDEC_SIZE) {
+            panic!("Memory Access: MDEC");
+        } else if address < memory_map::SPU_BASE {
+            panic!("Invalid Address: MDEC < address < SPU");
         } else if address < (memory_map::SPU_BASE + memory_map::SPU_SIZE) {
-            warn!("SPU access");
+            debug!("SPU access");
             0
+        } else if address < memory_map::EXP2_BASE {
+            panic!("Invalid Address: SPU < address < EXP2");
+        } else if address < (memory_map::EXP2_BASE + memory_map::EXP2_SIZE) {
+            warn!("Memory Access: EXP2");
+            0
+        } else if address < memory_map::EXP3_BASE {
+            panic!("Invalid Address: EXP2 < address < EXP3");
+        } else if address < (memory_map::EXP3_BASE + memory_map::EXP3_SIZE) {
+            panic!("Memory Access: EXP3");
         } else {
-            warn!("Other Memory Access");
-            0
+            panic!("Other Memory Access");
         }
     }
 
