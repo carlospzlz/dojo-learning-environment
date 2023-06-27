@@ -535,6 +535,7 @@ impl From<u8> for Cop0Reg {
     }
 }
 
+#[derive(Debug)]
 pub enum Exception {
     INT = 0x00,     // interrupt
     MOD = 0x01,     // tlb modification
@@ -608,6 +609,17 @@ impl Cop0CauseRegister {
         let masked_bits = self.bits & !0x7C;
         let masked_value = (value & 0x1F) as u32;
         self.bits = masked_bits | (masked_value << 2);
+    }
+
+    pub fn get_interrupt_pending(&self) -> u8 {
+        // 8 bits: 8-15
+        ((self.bits >> 8) & 0xFF) as u8
+    }
+
+    pub fn set_interrupt_pending(&mut self, value: u8) -> () {
+        // 8 bits: 8-15
+        let masked_bits = self.bits & !0xFF00;
+        self.bits = masked_bits | ((value as u32) << 8);
     }
 }
 

@@ -1,6 +1,5 @@
-use crate::system::bios::BIOS_SIZE;
+use crate::system::cpu::CPU;
 
-use generic_array::{typenum::U16, GenericArray};
 use log::{debug, error, info, warn};
 use sha2::{Digest, Sha256};
 use std::cmp;
@@ -162,7 +161,7 @@ pub struct WriteHalfWord;
 pub struct WriteWord;
 
 pub trait MemoryAccess {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu : &mut CPU) -> TickCount;
     fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
     fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount;
@@ -170,7 +169,7 @@ pub trait MemoryAccess {
 }
 
 impl MemoryAccess for ReadByte {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu: &mut CPU) -> TickCount {
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
         // Remove "byte index" in word
         let word_offset = offset & !0x3;
@@ -206,7 +205,7 @@ impl MemoryAccess for ReadByte {
 }
 
 impl MemoryAccess for ReadHalfWord {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu: &mut CPU) -> TickCount {
         assert!((address & 0x1) == 0);
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
         // Remove "half-word index" in word
@@ -246,7 +245,7 @@ impl MemoryAccess for ReadHalfWord {
 }
 
 impl MemoryAccess for ReadWord {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu: &mut CPU) -> TickCount {
         assert!((address & 0x3) == 0);
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
         *value = bus.interrupt_controller.read_register(offset);
@@ -286,13 +285,13 @@ impl MemoryAccess for ReadWord {
 }
 
 impl MemoryAccess for WriteByte {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu: &mut CPU) -> TickCount {
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
         // Remove "byte index" in word
         let word_offset = offset & !0x3;
         let word = *value << ((offset & 0x3) * 8);
         // We actually write the whole word
-        bus.interrupt_controller.write_register(word_offset, word);
+        bus.interrupt_controller.write_register(word_offset, word, cpu);
         0
     }
 
@@ -331,14 +330,15 @@ impl MemoryAccess for WriteByte {
 }
 
 impl MemoryAccess for WriteHalfWord {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu: &mut CPU) -> TickCount {
         assert!((address & 0x1) == 0);
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
         // Remove "half-word index" in word
         let word_offset = offset & !0x2;
         let word = *value << ((offset & 0x2) * 16);
+        println!("value: {:x}; word: {:x}, offset: {:x} wo: {:x}", value, word, offset, word_offset);
         // We actually write the whole word
-        bus.interrupt_controller.write_register(word_offset, word);
+        bus.interrupt_controller.write_register(word_offset, word, cpu);
         0
     }
 
@@ -378,10 +378,10 @@ impl MemoryAccess for WriteHalfWord {
 }
 
 impl MemoryAccess for WriteWord {
-    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+    fn do_interrupt_controller_access(address: u32, value: &mut u32, bus: &mut Bus, cpu: &mut CPU) -> TickCount {
         assert!((address & 0x3) == 0);
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
-        bus.interrupt_controller.write_register(offset, *value);
+        bus.interrupt_controller.write_register(offset, *value, cpu);
         0
     }
 
@@ -653,6 +653,7 @@ impl Bus {
         address: u32,
         value: &mut u32,
         cache_is_isolated: bool,
+        cpu: &mut CPU,
     ) -> TickCount {
         let tag = address >> 29;
         match tag {
@@ -669,9 +670,9 @@ impl Bus {
                     // With the cache isolated, no writes to memory occur.
                     return 0;
                 }
-                self.do_memory_access::<T>(address, value)
+                self.do_memory_access::<T>(address, value, cpu)
             }
-            0x05 => self.do_memory_access::<T>(address, value),
+            0x05 => self.do_memory_access::<T>(address, value, cpu),
             0x01 | 0x02 | 0x03 => panic!("Reading KUSEG above 512M!"),
             0x06 | 0x07 => {
                 warn!("Reading KUSEG2 (cache control)");
@@ -681,7 +682,7 @@ impl Bus {
         }
     }
 
-    fn do_memory_access<T: MemoryAccess>(&mut self, address: u32, value: &mut u32) -> TickCount {
+    fn do_memory_access<T: MemoryAccess>(&mut self, address: u32, value: &mut u32, cpu: &mut CPU) -> TickCount {
         let address = address & PHYSICAL_MEMORY_ADDRESS_MASK;
 
         if address < memory_map::RAM_MIRROR_END {
@@ -713,7 +714,7 @@ impl Bus {
             < (memory_map::INTERRUPT_CONTROLLER_BASE + memory_map::INTERRUPT_CONTROLLER_SIZE)
         {
             debug!("Memory Access: INTERRUPT_CONTROLLER");
-            T::do_interrupt_controller_access(address, value, self)
+            T::do_interrupt_controller_access(address, value, self, cpu)
         } else if address < (memory_map::DMA_BASE + memory_map::DMA_SIZE) {
             warn!("Memory Access: DMA");
             0

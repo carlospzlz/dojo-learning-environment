@@ -70,7 +70,8 @@ impl CPU {
         self.fetch_instruction(bus);
         self.execute_instruction(bus);
 
-        let start = 19258280;
+        //let start = 19258165;
+        let start = 21370;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
@@ -475,7 +476,7 @@ impl CPU {
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value: u32 = u32::default();
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated);
+        bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated, self);
         let sext_value = ((value & 0xFF) as i8 as i32) as u32;
         self.state.registers.write_register(rt, sext_value);
     }
@@ -491,7 +492,7 @@ impl CPU {
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value = u32::default();
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated);
+        bus.access_memory::<ReadByte>(address, &mut value, cache_is_isolated, self);
         self.state.registers.write_register(rt, value);
     }
 
@@ -507,7 +508,7 @@ impl CPU {
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value: u32 = u32::default();
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<ReadHalfWord>(address, &mut value, cache_is_isolated);
+        bus.access_memory::<ReadHalfWord>(address, &mut value, cache_is_isolated, self);
         let sext_value = ((value & 0xFFFF) as i16 as i32) as u32;
         self.state.registers.write_register(rt, sext_value);
     }
@@ -519,14 +520,14 @@ impl CPU {
         let rt = self.state.instruction.get_rt();
         let base = self.state.instruction.get_base();
         let offset = self.state.instruction.get_offset();
-        error!("LHU rt={}, base={}, offset={}", rt, base, offset);
+        debug!("LHU rt={}, base={}, offset={}", rt, base, offset);
         let base_value = self.state.registers.read_register(base);
         let sext_offset = offset as i16 as i32;
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut value = u32::default();
-        println!("{:x}", address);
+        //println!("{:x}", address);
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<ReadHalfWord>(address, &mut value, cache_is_isolated);
+        bus.access_memory::<ReadHalfWord>(address, &mut value, cache_is_isolated, self);
         self.state.registers.write_register(rt, value);
     }
 
@@ -550,7 +551,7 @@ impl CPU {
         let address = ((base_value as i32) + sext_offset) as u32;
         let mut word: u32 = 0;
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<ReadWord>(address, &mut word, cache_is_isolated);
+        bus.access_memory::<ReadWord>(address, &mut word, cache_is_isolated, self);
         self.state.registers.write_register(rt, word);
     }
 
@@ -778,7 +779,7 @@ impl CPU {
         let ts_value = self.state.registers.read_register(rt);
         let mut value = ts_value & 0x000000FF;
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<WriteByte>(address, &mut value, cache_is_isolated);
+        bus.access_memory::<WriteByte>(address, &mut value, cache_is_isolated, self);
     }
 
     fn execute_sh(&mut self, bus: &mut Bus) -> () {
@@ -794,7 +795,8 @@ impl CPU {
         let ts_value = self.state.registers.read_register(rt);
         let mut value = ts_value & 0x0000FFFF;
         let cache_is_isolated = self.state.cop0_registers.sr.get_isc();
-        bus.access_memory::<WriteHalfWord>(address, &mut value, cache_is_isolated);
+        // We pass the CPU so the interrupt controller can set the cause
+        bus.access_memory::<WriteHalfWord>(address, &mut value, cache_is_isolated, self);
     }
 
     fn execute_subu(&mut self) -> () {
@@ -826,7 +828,7 @@ impl CPU {
             "Base: {:x} Offset: {:x} Address: {:x}",
             base as u32, offset, address
         );
-        bus.access_memory::<WriteWord>(address, &mut rt_value, cache_is_isolated);
+        bus.access_memory::<WriteWord>(address, &mut rt_value, cache_is_isolated, self);
     }
 
     fn execute_syscall(&mut self, bus: &mut Bus) -> () {
@@ -888,6 +890,7 @@ impl CPU {
     // Exception handling
 
     fn raise_exception(&mut self, exception: Exception, bus: &mut Bus) -> () {
+        error!("Exception raised: {:?} ({})", exception, self.state.cycle);
         self.state.cop0_registers.epc = self.state.current_instruction_pc;
 
         // Make value for exception
@@ -922,6 +925,19 @@ impl CPU {
 
         // Prefetch next instruction
         self.fetch_instruction(bus);
+    }
+
+    pub fn set_external_interrupt(&mut self, bit: u8) {
+        println!("Update interrupt request: {}", bit);
+        let interrupt_pending = self.state.cop0_registers.cause.get_interrupt_pending() | (1 << bit);
+        self.state.cop0_registers.cause.set_interrupt_pending(interrupt_pending);
+
+    }
+
+    pub fn clear_external_interrupt(&mut self, bit: u8) {
+        println!("Clear interrupt request: {}", bit);
+        let interrupt_pending = self.state.cop0_registers.cause.get_interrupt_pending() & !(1 << bit);
+        self.state.cop0_registers.cause.set_interrupt_pending(interrupt_pending);
     }
 }
 
