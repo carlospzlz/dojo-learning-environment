@@ -1,11 +1,12 @@
 use eframe::egui;
 
+use egui::Color32;
 use egui::mutex::Mutex;
 use std::sync::Arc;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(885.0, 550.0)),
+        initial_window_size: Some(egui::vec2(890.0, 550.0)),
         multisampling: 4,
         renderer: eframe::Renderer::Glow,
         ..Default::default()
@@ -40,29 +41,47 @@ impl MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
+            ui.label("Debug info");
+        });
+        egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
+                // Emulator Controls
                 ui.button("Play");
                 ui.button("Stop");
                 ui.button("Next");
-                ui.text_edit_singleline(&mut self.filename);
+
+                // File Controls
+                ui.button("Load");
                 ui.button("Save");
-            })
-        });
-        egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
-                ui.button("Triangle");
-                ui.horizontal(|ui| {
-                    ui.button("Square");
-                    ui.button("Circle");
-                });
-                ui.button("Cross");
-        });
+            });
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
-                ui.button("Up");
+                ui.horizontal(|ui| {});
                 ui.horizontal(|ui| {
-                    ui.button("Left");
-                    ui.button("Right");
+                    ui.add_space(14.0);
+                    ui.button("⏶");
+                    ui.add_space(30.0);
+                    ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(64, 226, 160));
+                    ui.button("∆");
                 });
-                ui.button("Down");
+                ui.horizontal(|ui| {
+                    ui.button("⏴");
+                    ui.button("⏵");
+                    ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 105, 248));
+                    ui.button("◻");
+                    ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 102, 102));
+                    ui.button("○");
+                });
+                ui.horizontal(|ui| {
+                    ui.add_space(14.0);
+                    ui.button("⏷");
+                    ui.add_space(29.0);
+                    ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(124, 178, 232));
+                    ui.button("🗙");
+                });
+                ui.horizontal(|ui| {});
+                ui.horizontal(|ui| {
+                    ui.button("SELECT");
+                    ui.button("START");
+                });
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::Frame::canvas(ui.style()).show(ui, |ui| {
