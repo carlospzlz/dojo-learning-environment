@@ -71,7 +71,7 @@ impl CPU {
         self.execute_instruction(bus);
 
         //let start = 19258165;
-        let start = 21370;
+        let start = 0;
         let amount = 10000;
         if self.state.cycle > start && self.state.cycle < (start + amount) {
             self.state.dump_header();
@@ -105,7 +105,7 @@ impl CPU {
     fn execute_instruction(&mut self, bus: &mut Bus) -> () {
         let instruction = &self.state.instruction;
         debug!(
-            "[Cycle={}] {:x}  {} ({:?})",
+            "[Cycle={}] 0x{:08x}  {} ({:?})",
             self.state.cycle,
             instruction.bits,
             instruction.to_string(),
@@ -422,11 +422,11 @@ impl CPU {
     fn execute_j(&mut self) -> () {
         // J target
         let target = self.state.instruction.get_target();
-        let address = (self.state.registers.pc & 0xF0000000) | (target << 2);
+        let target = (self.state.registers.pc & 0xF0000000) | (target << 2);
         // Address must be multiple of 4
-        assert!((address & 0x3) == 0);
-        debug!("[target={}]", target);
-        self.state.registers.npc = address;
+        assert!((target & 0x3) == 0);
+        debug!("[target=0x{:08x}]", target);
+        self.state.registers.npc = target;
     }
 
     fn execute_jal(&mut self) -> () {

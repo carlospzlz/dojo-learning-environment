@@ -296,6 +296,7 @@ impl MemoryAccess for ReadWord {
         bus: &mut Bus,
         cpu: &mut CPU,
     ) -> TickCount {
+        // Access must be 4 bytes aligned
         assert!((address & 0x3) == 0);
         let offset = address & memory_map::INTERRUPT_CONTROLLER_MASK;
         //*value = bus.interrupt_controller.read_register(offset);
@@ -303,6 +304,8 @@ impl MemoryAccess for ReadWord {
     }
 
     fn do_ram_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        // Access must be 4 bytes aligned
+        assert!((address & 0x3) == 0);
         let offset = address & memory_map::RAM_2MB_MASK;
         // Little endian
         *value = ((bus.ram[(offset + 3) as usize] as u32) << 24)
@@ -313,6 +316,8 @@ impl MemoryAccess for ReadWord {
     }
 
     fn do_memory_control_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        // Access must be 4 bytes aligned
+        assert!((address & 0x3) == 0);
         let offset = address & memory_map::MEMCTRL_MASK;
         // Each register is 4 bytes
         let index = offset >> 2;
@@ -321,6 +326,8 @@ impl MemoryAccess for ReadWord {
     }
 
     fn do_bios_access(address: u32, value: &mut u32, bus: &mut Bus) -> TickCount {
+        // Access must be 4 bytes aligned
+        assert!((address & 0x3) == 0);
         let offset = ((address - memory_map::BIOS_BASE) & memory_map::BIOS_MASK) as usize;
         *value = ((bus.bios[(offset + 3) as usize] as u32) << 24)
             | ((bus.bios[(offset + 2) as usize] as u32) << 16)
