@@ -2233,8 +2233,10 @@ version = "0.1.0"
 dependencies = [
  "eframe",
  "egui",
+ "egui_glow",
  "env_logger",
  "generic-array",
+ "glow",
  "image",
  "log",
  "md-5",
