@@ -929,15 +929,22 @@ impl CPU {
 
     pub fn set_external_interrupt(&mut self, bit: u8) {
         println!("Update interrupt request: {}", bit);
-        let interrupt_pending = self.state.cop0_registers.cause.get_interrupt_pending() | (1 << bit);
-        self.state.cop0_registers.cause.set_interrupt_pending(interrupt_pending);
-
+        let interrupt_pending =
+            self.state.cop0_registers.cause.get_interrupt_pending() | (1 << bit);
+        self.state
+            .cop0_registers
+            .cause
+            .set_interrupt_pending(interrupt_pending);
     }
 
     pub fn clear_external_interrupt(&mut self, bit: u8) {
         println!("Clear interrupt request: {}", bit);
-        let interrupt_pending = self.state.cop0_registers.cause.get_interrupt_pending() & !(1 << bit);
-        self.state.cop0_registers.cause.set_interrupt_pending(interrupt_pending);
+        let interrupt_pending =
+            self.state.cop0_registers.cause.get_interrupt_pending() & !(1 << bit);
+        self.state
+            .cop0_registers
+            .cause
+            .set_interrupt_pending(interrupt_pending);
     }
 }
 

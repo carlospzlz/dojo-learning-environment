@@ -1,11 +1,7 @@
-pub struct InterruptController {
-
-}
+pub struct InterruptController {}
 
 impl InterruptController {
     pub fn new() -> Self {
-        Self {
-
-        }
+        Self {}
     }
 }
