@@ -37,11 +37,11 @@ impl System {
         // Render display
     }
 
-    pub fn get_cycle(&mut self) -> usize {
+    pub fn get_cycle(&self) -> usize {
         self.cpu.get_cycle()
     }
 
-    pub fn get_instruction(&mut self) -> u32 {
+    pub fn get_instruction(&self) -> u32 {
         self.cpu.get_instruction()
     }
 

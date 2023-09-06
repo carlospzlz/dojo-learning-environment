@@ -15,6 +15,10 @@ path = "src/tekken_learning_environment_gui.rs"
 name = "emu_explorer"
 path = "src/emu_explorer.rs"
 
+[[bin]]
+name = "test_thread"
+path = "src/test_thread.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

@@ -53,6 +53,6 @@ impl eframe::App for MyApp {
                 self.age += 1;
             }
             ui.label(format!("Hello '{}', age {}", self.name, self.age));
-       });
+        });
     }
 }
