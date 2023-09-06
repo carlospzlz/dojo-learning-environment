@@ -21,19 +21,19 @@ fn main() -> () {
         run_system(system_clone, is_running_clone, execute_once_clone);
     });
 
-    //// GUI thread
-    //let options = eframe::NativeOptions {
-    //    initial_window_size: Some(egui::vec2(890.0, 525.0)),
-    //    multisampling: 4,
-    //    renderer: eframe::Renderer::Glow,
-    //    ..Default::default()
-    //};
-    //eframe::run_native(
-    //    "Emu Explorer",
-    //    options,
-    //    Box::new(|cc| Box::new(MyApp::new(cc, system, is_running, execute_once))),
-    //);
-    //println!("hey");
+    // GUI thread
+    let options = eframe::NativeOptions {
+        initial_window_size: Some(egui::vec2(890.0, 525.0)),
+        multisampling: 4,
+        renderer: eframe::Renderer::Glow,
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Emu Explorer",
+        options,
+        Box::new(|cc| Box::new(MyApp::new(cc, system, is_running, execute_once))),
+    );
+
     handle.join().unwrap();
 }
 
@@ -43,31 +43,20 @@ fn run_system(
     is_running: Arc<Mutex<bool>>,
     execute_once: Arc<Mutex<bool>>,
 ) -> () {
-    //system.lock().unwrap().boot_system();
-    let mut system = System::new();
-    //system.boot_system();
-    system.execute();
-    system.execute();
-    system.execute();
-    //loop {
-    //    //if *is_running.lock().unwrap() {
-    //    //    println!("About to execute");
-    //    //    let mut system = system.lock().unwrap().execute();
-    //    //    thread::sleep(std::time::Duration::from_secs(2));
-    //    //} else if *execute_once.lock().unwrap() {
-    //    //    println!("Execute once");
-    //    //    system.lock().unwrap().execute();
-    //    //    let mut execute_once = execute_once.lock().unwrap();
-    //    //    *execute_once = false;
-    //    //} else {
-    //    //    thread::sleep(std::time::Duration::from_millis(20));
-    //    //}
-    //    //println!("Here");
-    //    //let mut system = system.lock().unwrap();
-    //    //system.execute();
-    //    system.execute();
-    //    thread::sleep(std::time::Duration::from_secs(2));
-    //}
+    system.lock().unwrap().boot_system();
+
+    loop {
+        if *is_running.lock().unwrap() {
+            println!("About to execute");
+            let mut system = system.lock().unwrap().execute();
+        } else if *execute_once.lock().unwrap() {
+            println!("Execute once");
+            system.lock().unwrap().execute();
+            let mut execute_once = execute_once.lock().unwrap();
+            *execute_once = false;
+        }
+        thread::sleep(std::time::Duration::from_millis(20));
+    }
 }
 
 struct MyApp {
@@ -101,41 +90,37 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        //if self.is_running {
-        //    self.system.execute();
-        //}
+        egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
+            ui.label("Debug info");
+            let system = self.system.lock().unwrap();
+            let cycle = system.get_cycle();
+            let instruction = system.get_instruction();
+            ui.label(format!("{}", cycle));
+            ui.label(format!("0x{:08x}", instruction));
+        });
+        egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
+            if ui.button("Next Instruction").clicked() {
+                let is_running = self.is_running.lock().unwrap();
+                if !(*is_running) {
+                    let mut execute_once = self.execute_once.lock().unwrap();
+                    *execute_once = true;
+                }
+            }
+            if ui.button("Play").clicked() {
+                let mut is_running = self.is_running.lock().unwrap();
+                *is_running = true;
+                println!("Passes");
+            }
+            if ui.button("Stop").clicked() {
+                let mut is_running = self.is_running.lock().unwrap();
+                *is_running = false;
+            }
+            ui.button("Next");
 
-        //egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
-        //    ui.label("Debug info");
-        //    let system = self.system.lock().unwrap();
-        //    let cycle = system.get_cycle();
-        //    let instruction = system.get_instruction();
-        //    ui.label(format!("{}", cycle));
-        //    ui.label(format!("0x{:08x}", instruction));
-        //});
-        //egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
-        //    if ui.button("Next Instruction").clicked() {
-        //        let is_running = self.is_running.lock().unwrap();
-        //        if !(*is_running) {
-        //            let mut execute_once = self.execute_once.lock().unwrap();
-        //            *execute_once = true;
-        //        }
-        //    }
-        //    if ui.button("Play").clicked() {
-        //        let mut is_running = self.is_running.lock().unwrap();
-        //        *is_running = true;
-        //        println!("Passes");
-        //    }
-        //    if ui.button("Stop").clicked() {
-        //        let mut is_running = self.is_running.lock().unwrap();
-        //        *is_running = false;
-        //    }
-        //    ui.button("Next");
-
-        //    // File Controls
-        //    ui.button("Load");
-        //    ui.button("Save");
-        //});
+            // File Controls
+            ui.button("Load");
+            ui.button("Save");
+        });
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {});
             ui.horizontal(|ui| {
