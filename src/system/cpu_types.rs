@@ -554,7 +554,7 @@ pub enum Exception {
 
 impl Exception {
     pub fn get_excode(&self) -> u8 {
-        match (self) {
+        match self {
             Exception::INT => 0x00,
             Exception::MOD => 0x01,
             Exception::TLBL => 0x02,
