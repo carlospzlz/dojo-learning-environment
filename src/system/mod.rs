@@ -37,6 +37,14 @@ impl System {
         // Render display
     }
 
+    pub fn get_cycle(&mut self) -> usize {
+        self.cpu.get_cycle()
+    }
+
+    pub fn get_instruction(&mut self) -> u32 {
+        self.cpu.get_instruction()
+    }
+
     fn run_frame(&mut self) -> Result<(), String> {
         // GPU restore
         self.cpu.execute(&mut self.bus)

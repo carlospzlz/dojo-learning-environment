@@ -65,6 +65,14 @@ impl CPU {
         }
     }
 
+    pub fn get_cycle(&self) -> usize {
+        self.state.cycle
+    }
+
+    pub fn get_instruction(&self) -> u32 {
+        self.state.instruction.bits
+    }
+
     pub fn execute(&mut self, bus: &mut Bus) -> Result<(), String> {
         self.state.current_instruction_pc = self.state.registers.pc;
         self.fetch_instruction(bus);

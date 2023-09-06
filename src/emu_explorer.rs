@@ -4,9 +4,13 @@ use egui::Color32;
 use egui::mutex::Mutex;
 use std::sync::Arc;
 
+// Emu system
+mod system;
+use system::System;
+
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(890.0, 550.0)),
+        initial_window_size: Some(egui::vec2(890.0, 525.0)),
         multisampling: 4,
         renderer: eframe::Renderer::Glow,
         ..Default::default()
@@ -19,7 +23,8 @@ fn main() -> Result<(), eframe::Error> {
 }
 
 struct MyApp {
-    filename: String,
+    system: system::System,
+    is_running: bool,
     rotating_triangle: Arc<Mutex<RotatingTriangle>>,
     angle: f32,
 }
@@ -31,7 +36,8 @@ impl MyApp {
             .as_ref()
             .expect("You need to run eframe with the glow backend");
         Self {
-            filename: "my_state".to_owned(),
+            system: System::new(),
+            is_running: false,
             rotating_triangle: Arc::new(Mutex::new(RotatingTriangle::new(gl))),
             angle: 0.0,
         }
@@ -40,13 +46,32 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.is_running {
+            self.system.execute();
+        }
+
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
             ui.label("Debug info");
+            let cycle = self.system.get_cycle();
+            let instruction = self.system.get_instruction();
+            ui.label(format!("{}", cycle));
+            ui.label(format!("0x{:08x}", instruction));
+
         });
         egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
                 // Emulator Controls
-                ui.button("Play");
-                ui.button("Stop");
+                if ui.button("Boot").clicked() {
+                    self.system.boot_system();
+                }
+                if ui.button("Next Instruction").clicked() && !self.is_running {
+                    self.system.execute();
+                }
+                if ui.button("Play").clicked() {
+                    self.is_running = true;
+                }
+                if ui.button("Stop").clicked() {
+                    self.is_running = false;
+                }
                 ui.button("Next");
 
                 // File Controls
