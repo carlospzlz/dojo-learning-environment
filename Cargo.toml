@@ -1,7 +1,7 @@
 [package]
 name = "tekken_learning_environment"
 version = "0.1.0"
-edition = "2023"
+edition = "2021"
 
 [[bin]]
 name = "tekken_learning_environment_cli"
@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [[bin]]
 name = "tekken_learning_environment_gui"
-path = "src/tekken_learning_environment.rs"
+path = "src/tekken_learning_environment_gui.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,3 +22,5 @@ md-5 = "0.10.5"
 num-traits = "0.2.15"
 sha2 = "0.10.6"
 tim2 = "0.3.1"
+egui = "0.22.0"
+eframe = "0.22.0"
