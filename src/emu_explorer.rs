@@ -8,20 +8,6 @@ mod system;
 use system::System;
 
 fn main() -> () {
-    // Shared state
-    let system = Arc::new(Mutex::new(System::new()));
-    let is_running = Arc::new(Mutex::new(false));
-    let execute_once = Arc::new(Mutex::new(false));
-
-    // System thread
-    let system_clone = Arc::clone(&system);
-    let is_running_clone = Arc::clone(&is_running);
-    let execute_once_clone = Arc::clone(&execute_once);
-    let handle = thread::spawn(move || {
-        run_system(system_clone, is_running_clone, execute_once_clone);
-    });
-
-    // GUI thread
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(890.0, 525.0)),
         multisampling: 4,
@@ -31,38 +17,12 @@ fn main() -> () {
     eframe::run_native(
         "Emu Explorer",
         options,
-        Box::new(|cc| Box::new(MyApp::new(cc, system, is_running, execute_once))),
+        Box::new(|cc| Box::new(MyApp::new(cc))),
     );
-
-    handle.join().unwrap();
-}
-
-// To run in thread
-fn run_system(
-    system: Arc<Mutex<System>>,
-    is_running: Arc<Mutex<bool>>,
-    execute_once: Arc<Mutex<bool>>,
-) -> () {
-    system.lock().unwrap().boot_system();
-
-    loop {
-        if *is_running.lock().unwrap() {
-            println!("About to execute");
-            let mut system = system.lock().unwrap().execute();
-        } else if *execute_once.lock().unwrap() {
-            println!("Execute once");
-            system.lock().unwrap().execute();
-            let mut execute_once = execute_once.lock().unwrap();
-            *execute_once = false;
-        }
-        thread::sleep(std::time::Duration::from_millis(20));
-    }
 }
 
 struct MyApp {
-    system: Arc<Mutex<System>>,
-    is_running: Arc<Mutex<bool>>,
-    execute_once: Arc<Mutex<bool>>,
+    system: System,
     rotating_triangle: Arc<Mutex<RotatingTriangle>>,
     angle: f32,
 }
@@ -70,18 +30,13 @@ struct MyApp {
 impl MyApp {
     fn new(
         cc: &eframe::CreationContext<'_>,
-        system: Arc<Mutex<System>>,
-        is_running: Arc<Mutex<bool>>,
-        execute_once: Arc<Mutex<bool>>,
     ) -> Self {
         let gl = cc
             .gl
             .as_ref()
             .expect("You need to run eframe with the glow backend");
         Self {
-            system,
-            is_running,
-            execute_once,
+            system: System::new(),
             rotating_triangle: Arc::new(Mutex::new(RotatingTriangle::new(gl))),
             angle: 0.0,
         }
@@ -92,31 +47,27 @@ impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
             ui.label("Debug info");
-            let system = self.system.lock().unwrap();
-            let cycle = system.get_cycle();
-            let instruction = system.get_instruction();
+            let cycle = self.system.get_cycle();
+            let instruction = self.system.get_instruction();
             ui.label(format!("{}", cycle));
             ui.label(format!("0x{:08x}", instruction));
         });
         egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
-            if ui.button("Next Instruction").clicked() {
-                let is_running = self.is_running.lock().unwrap();
-                if !(*is_running) {
-                    let mut execute_once = self.execute_once.lock().unwrap();
-                    *execute_once = true;
-                }
+            if ui.button("Boot").clicked() {
+                self.system.boot();
             }
-            if ui.button("Play").clicked() {
-                let mut is_running = self.is_running.lock().unwrap();
-                *is_running = true;
-                println!("Passes");
+            if ui.button("Start").clicked() {
+                self.system.start();
             }
             if ui.button("Stop").clicked() {
-                let mut is_running = self.is_running.lock().unwrap();
-                *is_running = false;
+                self.system.stop();
             }
-            ui.button("Next");
-
+            if ui.button("Next Instruction").clicked() {
+                self.system.next_instruction();
+            }
+            if ui.button("Shutdown").clicked() {
+                self.system.shutdown();
+            }
             // File Controls
             ui.button("Load");
             ui.button("Save");

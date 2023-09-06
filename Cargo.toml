@@ -12,6 +12,10 @@ name = "tekken_learning_environment_gui"
 path = "src/tekken_learning_environment_gui.rs"
 
 [[bin]]
+name = "hello_emu"
+path = "src/hello_emu.rs"
+
+[[bin]]
 name = "emu_explorer"
 path = "src/emu_explorer.rs"
 

@@ -139,7 +139,7 @@ mod i_cache {
 
 pub struct Bus {
     pub bios: Box<[u8]>, //=[u8; memory_map::BIOS_SIZE as usize],
-    pub ram: Box<[u8]>, //[u8; memory_map::RAM_2MB_SIZE as usize],
+    pub ram: Box<[u8]>,  //[u8; memory_map::RAM_2MB_SIZE as usize],
     mem_ctrl_registers: MemCtrlRegisters,
     bios_access_time: AccessTimes,
     cdrom_access_time: AccessTimes,

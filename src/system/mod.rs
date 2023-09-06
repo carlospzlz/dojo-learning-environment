@@ -11,13 +11,130 @@ use cpu::CPU;
 
 use std::result::Result;
 use std::string::String;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 pub struct System {
+    inner_system: Arc<Mutex<InnerSystem>>,
+    processing_thread: Option<thread::JoinHandle<()>>,
+    is_on: Arc<Mutex<bool>>,
+    is_running: Arc<Mutex<bool>>,
+    run_next_instruction: Arc<Mutex<bool>>,
+    run_next_frame: Arc<Mutex<bool>>,
+    callback: Option<Box<dyn Fn()>>,
+}
+
+struct InnerSystem {
     bus: Bus,
     cpu: CPU,
 }
 
+// To run in thread
+fn run_inner_system(
+    inner_system: Arc<Mutex<InnerSystem>>,
+    is_on: Arc<Mutex<bool>>,
+    is_running: Arc<Mutex<bool>>,
+    run_next_instruction: Arc<Mutex<bool>>,
+    run_next_frame: Arc<Mutex<bool>>,
+) -> () {
+    while *is_on.lock().unwrap() {
+        if *is_running.lock().unwrap() {
+            inner_system.lock().unwrap().next_instruction();
+        } else if *run_next_instruction.lock().unwrap() {
+            inner_system.lock().unwrap().next_instruction();
+            let mut run_next_instruction = run_next_instruction.lock().unwrap();
+            *run_next_instruction = false;
+        }
+        thread::sleep(std::time::Duration::from_millis(20));
+    }
+}
+
 impl System {
+    pub fn new() -> Self {
+        Self {
+            inner_system: Arc::new(Mutex::new(InnerSystem::new())),
+            processing_thread: None,
+            is_on: Arc::new(Mutex::new(false)),
+            is_running: Arc::new(Mutex::new(false)),
+            run_next_instruction: Arc::new(Mutex::new(false)),
+            run_next_frame: Arc::new(Mutex::new(false)),
+            callback: None,
+        }
+    }
+
+    pub fn boot(&mut self) -> () {
+        // Boot inner system
+        self.inner_system.lock().unwrap().boot();
+        // We are on!
+        let mut is_on = self.is_on.lock().unwrap();
+        *is_on = true;
+        // Launch processing thread
+        let inner_system = Arc::clone(&self.inner_system);
+        let is_on = Arc::clone(&self.is_on);
+        let is_running = Arc::clone(&self.is_running);
+        let run_next_instruction = Arc::clone(&self.run_next_instruction);
+        let run_next_frame = Arc::clone(&self.run_next_frame);
+        let handle = thread::spawn(move || {
+            run_inner_system(
+                inner_system,
+                is_on,
+                is_running,
+                run_next_instruction,
+                run_next_frame,
+            );
+        });
+        self.processing_thread = Some(handle);
+    }
+
+    pub fn register_on_instruction_completed_callback<F>(&mut self, callback: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.callback = Some(Box::new(callback));
+    }
+
+    pub fn register_on_frame_completed_callback(&mut self) -> () {}
+
+    pub fn start(&mut self) -> () {
+        let mut is_running = self.is_running.lock().unwrap();
+        *is_running = true;
+    }
+
+    pub fn next_instruction(&mut self) -> () {
+        let mut run_next_instruction = self.run_next_instruction.lock().unwrap();
+        *run_next_instruction = true;
+    }
+
+    pub fn next_frame(&mut self) -> () {}
+
+    pub fn stop(&mut self) -> () {
+        let mut is_running = self.is_running.lock().unwrap();
+        *is_running = false;
+    }
+
+    pub fn reset(&mut self) -> () {}
+
+    pub fn shutdown(&mut self) -> () {
+        // We need a scope to avoid deadlock on thread
+        {
+            let mut is_on = self.is_on.lock().unwrap();
+            *is_on = false;
+        }
+        if let Some(handle) = self.processing_thread.take() {
+            handle.join().unwrap();
+        }
+    }
+
+    pub fn get_cycle(&self) -> usize {
+        self.inner_system.lock().unwrap().get_cycle()
+    }
+
+    pub fn get_instruction(&self) -> u32 {
+        self.inner_system.lock().unwrap().get_instruction()
+    }
+}
+
+impl InnerSystem {
     pub fn new() -> Self {
         Self {
             bus: Bus::new(),
@@ -25,14 +142,12 @@ impl System {
         }
     }
 
-    pub fn boot_system(&mut self) -> Result<(), String> {
+    pub fn boot(&mut self) -> () {
         self.load_bios().expect("Failed to load Bios");
         self.initialize().expect("Failed to initialize");
-        //s_cpu_thread_handler = GetForCallingThread()
-        Ok(())
     }
 
-    pub fn execute(&mut self) -> Result<(), String> {
+    pub fn next_instruction(&mut self) -> Result<(), String> {
         self.run_frame()
         // Render display
     }
