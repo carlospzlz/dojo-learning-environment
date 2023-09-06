@@ -12,8 +12,8 @@ name = "tekken_learning_environment_gui"
 path = "src/tekken_learning_environment_gui.rs"
 
 [[bin]]
-name = "state_saver"
-path = "src/state_saver.rs"
+name = "emu_explorer"
+path = "src/emu_explorer.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
