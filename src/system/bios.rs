@@ -10,25 +10,25 @@ pub const BIOS_MASK: u32 = (BIOS_SIZE as u32) - 1; // Size of the bios, 524288 b
 const HASH: &'static str = "924e392ed05558ffdb115408c263dccf"; // SCPH-1001 NTSC_U
 
 pub struct Bios {
-    bytes: [u8; BIOS_SIZE],
+    bytes: Box<[u8]>,
 }
 
 impl Bios {
     pub fn from_file(filename: &str) -> Result<Self, Error> {
         let mut file = File::open(filename)?;
-        let mut bytes = [0; BIOS_SIZE];
+        let mut bytes = vec![0; BIOS_SIZE].into_boxed_slice();
         file.read_exact(&mut bytes)?;
         println!("Read {} bytes from file", bytes.len());
-        Ok(Self { bytes: bytes })
+        Ok(Self { bytes })
     }
 
     pub fn get_hash(&self) -> GenericArray<u8, U16> {
         let mut hasher = Md5::new();
-        hasher.update(self.bytes);
+        hasher.update(self.bytes.clone());
         hasher.finalize()
     }
 
-    pub fn data(&self) -> [u8; BIOS_SIZE] {
-        self.bytes
+    pub fn data(&self) -> Box<[u8]> {
+        self.bytes.clone()
     }
 }

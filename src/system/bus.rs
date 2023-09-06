@@ -138,8 +138,8 @@ mod i_cache {
 }
 
 pub struct Bus {
-    pub bios: [u8; memory_map::BIOS_SIZE as usize],
-    pub ram: [u8; memory_map::RAM_2MB_SIZE as usize],
+    pub bios: Box<[u8]>, //=[u8; memory_map::BIOS_SIZE as usize],
+    pub ram: Box<[u8]>, //[u8; memory_map::RAM_2MB_SIZE as usize],
     mem_ctrl_registers: MemCtrlRegisters,
     bios_access_time: AccessTimes,
     cdrom_access_time: AccessTimes,
@@ -669,8 +669,8 @@ impl MemCtrlRegisters {
 impl Bus {
     pub fn new() -> Self {
         Self {
-            bios: [0; memory_map::BIOS_SIZE as usize],
-            ram: [0; memory_map::RAM_2MB_SIZE as usize],
+            bios: vec![0; memory_map::BIOS_SIZE as usize].into_boxed_slice(),
+            ram: vec![0; memory_map::RAM_2MB_SIZE as usize].into_boxed_slice(),
             mem_ctrl_registers: MemCtrlRegisters::new(),
             bios_access_time: AccessTimes {
                 byte: 0,
@@ -969,7 +969,7 @@ impl Bus {
 
     pub fn get_ram_hash(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(self.ram);
+        hasher.update(self.ram.clone());
         let result = hasher.finalize();
         format!("{:x}", result)
     }
