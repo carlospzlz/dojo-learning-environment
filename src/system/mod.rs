@@ -13,6 +13,17 @@ use std::result::Result;
 use std::string::String;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::collections::HashMap;
+
+#[derive(Eq, Hash, PartialEq)]
+pub enum Event {
+    SystemBootComplete,
+    SystemStartComplete,
+    SystemStopComplete,
+    SystemShutdownComplete,
+    InstructionComplete,
+    FrameComplete,
+}
 
 pub struct System {
     inner_system: Arc<Mutex<InnerSystem>>,
@@ -21,13 +32,16 @@ pub struct System {
     is_running: Arc<Mutex<bool>>,
     run_next_instruction: Arc<Mutex<bool>>,
     run_next_frame: Arc<Mutex<bool>>,
-    callback: Option<Box<dyn Fn()>>,
+    callbacks: Arc<Mutex<HashMap<Event, Box<dyn Fn()>>>>,
 }
 
 struct InnerSystem {
     bus: Bus,
     cpu: CPU,
 }
+
+// Define a type for the callback functions.
+type Callback = Box<dyn Fn() + Send + 'static>;
 
 // To run in thread
 fn run_inner_system(
@@ -36,6 +50,7 @@ fn run_inner_system(
     is_running: Arc<Mutex<bool>>,
     run_next_instruction: Arc<Mutex<bool>>,
     run_next_frame: Arc<Mutex<bool>>,
+    //callbacks: Arc<Mutex<HashMap<Event, Callback>>>,
 ) -> () {
     while *is_on.lock().unwrap() {
         if *is_running.lock().unwrap() {
@@ -58,13 +73,16 @@ impl System {
             is_running: Arc::new(Mutex::new(false)),
             run_next_instruction: Arc::new(Mutex::new(false)),
             run_next_frame: Arc::new(Mutex::new(false)),
-            callback: None,
+            callbacks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     pub fn boot(&mut self) -> () {
         // Boot inner system
         self.inner_system.lock().unwrap().boot();
+        if let Some(callback) = self.callbacks.lock().unwrap().get(&Event::SystemBootComplete) {
+            callback();
+        }
         // We are on!
         let mut is_on = self.is_on.lock().unwrap();
         *is_on = true;
@@ -74,6 +92,7 @@ impl System {
         let is_running = Arc::clone(&self.is_running);
         let run_next_instruction = Arc::clone(&self.run_next_instruction);
         let run_next_frame = Arc::clone(&self.run_next_frame);
+        let callbacks = Arc::clone(&self.callbacks);
         let handle = thread::spawn(move || {
             run_inner_system(
                 inner_system,
@@ -81,16 +100,18 @@ impl System {
                 is_running,
                 run_next_instruction,
                 run_next_frame,
+                //callbacks,
             );
         });
         self.processing_thread = Some(handle);
     }
 
-    pub fn register_on_instruction_completed_callback<F>(&mut self, callback: F)
-    where
-        F: Fn() + 'static,
+    pub fn register_callback<F>(&mut self, event: Event, callback: F)
+        where
+            F: Fn() + Send + 'static,
     {
-        self.callback = Some(Box::new(callback));
+        let mut callbacks = self.callbacks.lock().unwrap();
+        callbacks.insert(event, Box::new(callback));
     }
 
     pub fn register_on_frame_completed_callback(&mut self) -> () {}
@@ -110,6 +131,9 @@ impl System {
     pub fn stop(&mut self) -> () {
         let mut is_running = self.is_running.lock().unwrap();
         *is_running = false;
+        if let Some(callback) = self.callbacks.lock().unwrap().get(&Event::SystemStopComplete) {
+            callback();
+        }
     }
 
     pub fn reset(&mut self) -> () {}
@@ -123,6 +147,17 @@ impl System {
         if let Some(handle) = self.processing_thread.take() {
             handle.join().unwrap();
         }
+        if let Some(callback) = self.callbacks.lock().unwrap().get(&Event::SystemShutdownComplete) {
+            callback();
+        }
+    }
+
+    pub fn is_on(&self) -> bool {
+        *self.is_on.lock().unwrap()
+    }
+
+    pub fn is_running(&self) -> bool {
+        *self.is_running.lock().unwrap()
     }
 
     pub fn get_cycle(&self) -> usize {

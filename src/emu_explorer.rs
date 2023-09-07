@@ -1,11 +1,12 @@
 use eframe::egui;
-use egui::Color32;
+use egui::{Color32, RichText};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 // Emu system
 mod system;
 use system::System;
+use system::Event;
 
 fn main() -> () {
     let options = eframe::NativeOptions {
@@ -54,18 +55,34 @@ impl eframe::App for MyApp {
         });
         egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
             if ui.button("Boot").clicked() {
+                let ctx_clone = ctx.clone();
+                self.system.register_callback(Event::SystemBootComplete, move || {
+                    ctx_clone.request_repaint();
+                });
                 self.system.boot();
             }
             if ui.button("Start").clicked() {
+                let ctx_clone = ctx.clone();
+                self.system.register_callback(Event::SystemStartComplete, move || {
+                    ctx_clone.request_repaint();
+                });
                 self.system.start();
             }
             if ui.button("Stop").clicked() {
+                let ctx_clone = ctx.clone();
+                self.system.register_callback(Event::SystemStopComplete, move || {
+                    ctx_clone.request_repaint();
+                });
                 self.system.stop();
             }
             if ui.button("Next Instruction").clicked() {
                 self.system.next_instruction();
             }
             if ui.button("Shutdown").clicked() {
+                let ctx_clone = ctx.clone();
+                self.system.register_callback(Event::SystemShutdownComplete, move || {
+                    ctx_clone.request_repaint();
+                });
                 self.system.shutdown();
             }
             // File Controls
@@ -73,6 +90,18 @@ impl eframe::App for MyApp {
             ui.button("Save");
         });
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if self.system.is_on() {
+                    ui.label(RichText::new("⚡").color(Color32::YELLOW));
+                } else {
+                    ui.label(RichText::new("⚡").color(Color32::GRAY));
+                }
+                if self.system.is_running() {
+                    ui.label(RichText::new("⏺").color(Color32::LIGHT_GREEN));
+                } else {
+                    ui.label(RichText::new("⏺").color(Color32::GRAY));
+                }
+            });
             ui.horizontal(|ui| {});
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
