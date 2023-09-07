@@ -1,7 +1,7 @@
 mod system;
 
-use system::System;
 use std::thread;
+use system::System;
 
 fn main() {
     let mut system = System::new();

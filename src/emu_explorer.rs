@@ -5,8 +5,8 @@ use std::thread;
 
 // Emu system
 mod system;
-use system::System;
 use system::Event;
+use system::System;
 
 fn main() -> () {
     let options = eframe::NativeOptions {
@@ -29,9 +29,7 @@ struct MyApp {
 }
 
 impl MyApp {
-    fn new(
-        cc: &eframe::CreationContext<'_>,
-    ) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let gl = cc
             .gl
             .as_ref()
@@ -55,34 +53,24 @@ impl eframe::App for MyApp {
         });
         egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
             if ui.button("Boot").clicked() {
-                let ctx_clone = ctx.clone();
-                self.system.register_callback(Event::SystemBootComplete, move || {
-                    ctx_clone.request_repaint();
-                });
+                register_repaint_callback(ctx, &mut self.system, Event::SystemBootComplete);
                 self.system.boot();
             }
             if ui.button("Start").clicked() {
-                let ctx_clone = ctx.clone();
-                self.system.register_callback(Event::SystemStartComplete, move || {
-                    ctx_clone.request_repaint();
-                });
+                register_repaint_callback(ctx, &mut self.system, Event::SystemStartComplete);
+                register_repaint_callback(ctx, &mut self.system, Event::InstructionComplete);
                 self.system.start();
             }
             if ui.button("Stop").clicked() {
-                let ctx_clone = ctx.clone();
-                self.system.register_callback(Event::SystemStopComplete, move || {
-                    ctx_clone.request_repaint();
-                });
+                register_repaint_callback(ctx, &mut self.system, Event::SystemStopComplete);
                 self.system.stop();
             }
             if ui.button("Next Instruction").clicked() {
+                register_repaint_callback(ctx, &mut self.system, Event::InstructionComplete);
                 self.system.next_instruction();
             }
             if ui.button("Shutdown").clicked() {
-                let ctx_clone = ctx.clone();
-                self.system.register_callback(Event::SystemShutdownComplete, move || {
-                    ctx_clone.request_repaint();
-                });
+                register_repaint_callback(ctx, &mut self.system, Event::SystemShutdownComplete);
                 self.system.shutdown();
             }
             // File Controls
@@ -137,6 +125,17 @@ impl eframe::App for MyApp {
             });
         });
     }
+}
+
+fn register_repaint_callback(
+    ctx: &egui::Context,
+    system: &mut system::System,
+    event: system::Event,
+) {
+    let ctx_clone = ctx.clone();
+    system.register_callback(event, move || {
+        ctx_clone.request_repaint();
+    });
 }
 
 impl MyApp {

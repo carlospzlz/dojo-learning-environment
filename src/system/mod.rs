@@ -9,11 +9,11 @@ use bios::Bios;
 use bus::Bus;
 use cpu::CPU;
 
+use std::collections::HashMap;
 use std::result::Result;
 use std::string::String;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::collections::HashMap;
 
 #[derive(Eq, Hash, PartialEq)]
 pub enum Event {
@@ -25,6 +25,9 @@ pub enum Event {
     FrameComplete,
 }
 
+// Define a type for the callback functions.
+type Callback = Box<dyn Fn() + Send + 'static>;
+
 pub struct System {
     inner_system: Arc<Mutex<InnerSystem>>,
     processing_thread: Option<thread::JoinHandle<()>>,
@@ -32,16 +35,13 @@ pub struct System {
     is_running: Arc<Mutex<bool>>,
     run_next_instruction: Arc<Mutex<bool>>,
     run_next_frame: Arc<Mutex<bool>>,
-    callbacks: Arc<Mutex<HashMap<Event, Box<dyn Fn()>>>>,
+    callbacks: Arc<Mutex<HashMap<Event, Callback>>>,
 }
 
 struct InnerSystem {
     bus: Bus,
     cpu: CPU,
 }
-
-// Define a type for the callback functions.
-type Callback = Box<dyn Fn() + Send + 'static>;
 
 // To run in thread
 fn run_inner_system(
@@ -50,11 +50,14 @@ fn run_inner_system(
     is_running: Arc<Mutex<bool>>,
     run_next_instruction: Arc<Mutex<bool>>,
     run_next_frame: Arc<Mutex<bool>>,
-    //callbacks: Arc<Mutex<HashMap<Event, Callback>>>,
+    callbacks: Arc<Mutex<HashMap<Event, Callback>>>,
 ) -> () {
     while *is_on.lock().unwrap() {
         if *is_running.lock().unwrap() {
             inner_system.lock().unwrap().next_instruction();
+            if let Some(callback) = callbacks.lock().unwrap().get(&Event::InstructionComplete) {
+                callback();
+            }
         } else if *run_next_instruction.lock().unwrap() {
             inner_system.lock().unwrap().next_instruction();
             let mut run_next_instruction = run_next_instruction.lock().unwrap();
@@ -80,7 +83,12 @@ impl System {
     pub fn boot(&mut self) -> () {
         // Boot inner system
         self.inner_system.lock().unwrap().boot();
-        if let Some(callback) = self.callbacks.lock().unwrap().get(&Event::SystemBootComplete) {
+        if let Some(callback) = self
+            .callbacks
+            .lock()
+            .unwrap()
+            .get(&Event::SystemBootComplete)
+        {
             callback();
         }
         // We are on!
@@ -100,15 +108,15 @@ impl System {
                 is_running,
                 run_next_instruction,
                 run_next_frame,
-                //callbacks,
+                callbacks,
             );
         });
         self.processing_thread = Some(handle);
     }
 
     pub fn register_callback<F>(&mut self, event: Event, callback: F)
-        where
-            F: Fn() + Send + 'static,
+    where
+        F: Fn() + Send + 'static,
     {
         let mut callbacks = self.callbacks.lock().unwrap();
         callbacks.insert(event, Box::new(callback));
@@ -131,7 +139,12 @@ impl System {
     pub fn stop(&mut self) -> () {
         let mut is_running = self.is_running.lock().unwrap();
         *is_running = false;
-        if let Some(callback) = self.callbacks.lock().unwrap().get(&Event::SystemStopComplete) {
+        if let Some(callback) = self
+            .callbacks
+            .lock()
+            .unwrap()
+            .get(&Event::SystemStopComplete)
+        {
             callback();
         }
     }
@@ -147,7 +160,12 @@ impl System {
         if let Some(handle) = self.processing_thread.take() {
             handle.join().unwrap();
         }
-        if let Some(callback) = self.callbacks.lock().unwrap().get(&Event::SystemShutdownComplete) {
+        if let Some(callback) = self
+            .callbacks
+            .lock()
+            .unwrap()
+            .get(&Event::SystemShutdownComplete)
+        {
             callback();
         }
     }
