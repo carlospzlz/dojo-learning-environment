@@ -10,7 +10,7 @@ use system::System;
 
 fn main() -> () {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(890.0, 525.0)),
+        initial_window_size: Some(egui::vec2(890.0, 554.0)),
         multisampling: 4,
         renderer: eframe::Renderer::Glow,
         ..Default::default()
@@ -44,6 +44,14 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(113.0);
+                egui::Frame::canvas(ui.style()).show(ui, |ui| {
+                    self.custom_painting(ui);
+                });
+            });
+        });
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
             ui.label("Debug info");
             let cycle = self.system.get_cycle();
@@ -117,11 +125,6 @@ impl eframe::App for MyApp {
             ui.horizontal(|ui| {
                 ui.button("SELECT");
                 ui.button("START");
-            });
-        });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::Frame::canvas(ui.style()).show(ui, |ui| {
-                self.custom_painting(ui);
             });
         });
     }
