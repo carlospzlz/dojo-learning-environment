@@ -143,7 +143,7 @@ impl Bus {
         let mut error = false;
 
         let value = match address {
-            0x0000_0000...0x007f_ffff => {
+            0x0000_0000..=0x007f_ffff => {
                 let offset = (address & 0x1f_ffff) as usize;
 
                 match width {
