@@ -2231,6 +2231,7 @@ dependencies = [
 name = "tekken_learning_environment"
 version = "0.1.0"
 dependencies = [
+ "byteorder",
  "eframe",
  "egui",
  "egui_glow",

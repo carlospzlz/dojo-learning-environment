@@ -185,6 +185,10 @@ impl System {
     pub fn get_instruction(&self) -> u32 {
         self.inner_system.lock().unwrap().get_instruction()
     }
+
+    pub fn get_framebuffer(&self) -> Box<[u8]> {
+        self.bus.gpu.get_framebuffer()
+    }
 }
 
 impl InnerSystem {
