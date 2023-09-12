@@ -72,18 +72,34 @@ impl eframe::App for MyApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Get frame buffer
             let (width, height) = self.system.get_display_size();
-            println!("{}, {}", width, height);
             let (width, height) = (width as usize, height as usize);
             let mut framebuffer = vec![0; width * height * 3].into_boxed_slice();
             self.system.get_framebuffer(&mut framebuffer, false);
 
+            // Scale up
+            let mut img = RgbImage::new(width as u32, height as u32);
+            for (x, y, pixel) in img.enumerate_pixels_mut() {
+                let offset = ((y as u32 * width as u32 + x as u32) * 3) as usize;
+                let r = framebuffer[offset];
+                let g = framebuffer[offset + 1];
+                let b = framebuffer[offset + 2];
+                *pixel = Rgb([r, g, b]);
+            }
+
+            let asize = ui.available_size();
+            // 113 width of right panel
+            let new_width = asize[0].round() as u32 - 240;
+            let new_height = asize[1].round() as u32 - 40;
+
             // Load texture
-            let color_img = ColorImage::from_rgb([width, height], &framebuffer);
+            //let img = ColorImage::from_rgb([width, height], &framebuffer);
+            let img = image::imageops::resize(&img, new_width, new_height, image::imageops::FilterType::Lanczos3);
+            let img = ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
             let texture = ctx.load_texture(
                     "my-image",
                     //egui::ColorImage::example(),
                     //img.as_flat_samples(),
-                    color_img,
+                    img,
                     Default::default()
             );
 
