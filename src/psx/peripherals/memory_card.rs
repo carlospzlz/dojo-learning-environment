@@ -114,49 +114,49 @@ impl MemoryCard {
 
                         self.state = 0;
                         self.ack = false;
-                    },
+                    }
                 };
-            },
+            }
             2 => {
                 reply = 0x5a;
                 self.state = 3;
-            },
+            }
             3 => {
                 reply = 0x5d;
                 self.state = 4;
-            },
+            }
             4 => {
                 reply = 0x5c;
                 self.state = 5;
-            },
+            }
             5 => {
                 reply = 0x5d;
                 self.state = 6;
-            },
+            }
             6 => {
                 reply = 0x04;
                 self.state = 7;
-            },
+            }
             7 => {
                 reply = 0x00;
                 self.state = 8;
-            },
+            }
             8 => {
                 reply = 0x00;
                 self.state = 9;
-            },
+            }
             9 => {
                 reply = 0x80;
                 self.state = 0;
-            },
+            }
             10 => {
                 reply = 0x5a;
                 self.state = 11;
-            },
+            }
             11 => {
                 reply = 0x5d;
                 self.state = 12;
-            },
+            }
             12 => {
                 reply = 0x00;
                 self.sector &= 0xff;
@@ -166,7 +166,7 @@ impl MemoryCard {
                 self.checksum = command;
 
                 self.state = 13;
-            },
+            }
             13 => {
                 reply = self.previous;
 
@@ -182,19 +182,19 @@ impl MemoryCard {
                 }
 
                 self.state = 14;
-            },
+            }
             14 => {
                 reply = 0x5c;
                 self.state = 15;
-            },
+            }
             15 => {
                 reply = 0x5d;
                 self.state = 16;
-            },
+            }
             16 => {
                 reply = (self.sector >> 8) as u8;
                 self.state = 17;
-            },
+            }
             17 => {
                 reply = self.sector as u8;
 
@@ -206,7 +206,7 @@ impl MemoryCard {
                 } else {
                     self.state = 18;
                 }
-            },
+            }
             18 => {
                 let sector_addr = (self.sector as usize) * 0x80;
                 reply = self.read_cache(sector_addr + self.sector_counter);
@@ -218,26 +218,26 @@ impl MemoryCard {
                 if self.sector_counter == 0x80 {
                     self.state = 19;
                 }
-            },
+            }
             19 => {
                 reply = self.checksum;
                 self.state = 20;
-            },
+            }
             20 => {
                 reply = 0x47;
                 self.state = 0;
                 self.ack = false;
-            },
+            }
             21 => {
                 self.flag &= !0x08;
 
                 reply = 0x5a;
                 self.state = 22;
-            },
+            }
             22 => {
                 reply = 0x5d;
                 self.state = 23;
-            },
+            }
             23 => {
                 reply = 0x00;
                 self.sector &= 0xff;
@@ -247,7 +247,7 @@ impl MemoryCard {
                 self.checksum = command;
 
                 self.state = 24;
-            },
+            }
             24 => {
                 reply = self.previous;
 
@@ -265,7 +265,7 @@ impl MemoryCard {
                 } else {
                     self.state = 25;
                 }
-            },
+            }
             25 => {
                 reply = self.previous;
 
@@ -280,7 +280,7 @@ impl MemoryCard {
                 if self.sector_counter == 0x80 {
                     self.state = 26;
                 }
-            },
+            }
             26 => {
                 reply = self.previous;
 
@@ -288,15 +288,15 @@ impl MemoryCard {
 
                 self.checksum_match = self.checksum == command;
                 self.state = 27;
-            },
+            }
             27 => {
                 reply = 0x5c;
                 self.state = 28;
-            },
+            }
             28 => {
                 reply = 0x5d;
                 self.state = 29;
-            },
+            }
             29 => {
                 if self.checksum_match {
                     reply = 0x47;
@@ -307,7 +307,7 @@ impl MemoryCard {
 
                 self.ack = false;
                 self.state = 0;
-            },
+            }
             _ => panic!("[MCD] [ERROR] Unknown state: {}", self.state),
         };
 

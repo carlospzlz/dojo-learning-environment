@@ -219,10 +219,7 @@ impl R3000A {
         }
     }
 
-    fn execute(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               i: Instruction) {
+    fn execute(&mut self, bus: &mut Bus, tk: &mut Timekeeper, i: Instruction) {
         match i.opcode() {
             0x00 => self.op_special(i),
             0x01 => self.op_bcond(i.rs(), i.rt(), i.imm_se()),
@@ -791,12 +788,7 @@ impl R3000A {
         self.execute_load_delay();
     }
 
-    fn op_lb(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             rt: usize,
-             rs: usize,
-             offset: u32) {
+    fn op_lb(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         if self.cop0.test_read(addr) {
@@ -818,12 +810,7 @@ impl R3000A {
         self.update_load_delay(rt, v as i8 as u32);
     }
 
-    fn op_lh(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             rt: usize,
-             rs: usize,
-             offset: u32) {
+    fn op_lh(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         let cop0_break = self.cop0.test_read(addr);
@@ -853,12 +840,7 @@ impl R3000A {
         self.update_load_delay(rt, v as i16 as u32);
     }
 
-    fn op_lwl(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              rt: usize,
-              rs: usize,
-              offset: u32) {
+    fn op_lwl(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         if self.cop0.test_read(addr & 0xffff_fffc) {
@@ -895,12 +877,7 @@ impl R3000A {
         };
     }
 
-    fn op_lw(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             rt: usize,
-             rs: usize,
-             offset: u32) {
+    fn op_lw(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         let cop0_break = self.cop0.test_read(addr);
@@ -930,12 +907,7 @@ impl R3000A {
         self.update_load_delay(rt, v);
     }
 
-    fn op_lbu(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              rt: usize,
-              rs: usize,
-              offset: u32) {
+    fn op_lbu(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         if self.cop0.test_read(addr) {
@@ -957,12 +929,7 @@ impl R3000A {
         self.update_load_delay(rt, v as u32);
     }
 
-    fn op_lhu(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              rt: usize,
-              rs: usize,
-              offset: u32) {
+    fn op_lhu(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         let cop0_break = self.cop0.test_read(addr);
@@ -992,12 +959,7 @@ impl R3000A {
         self.update_load_delay(rt, v as u32);
     }
 
-    fn op_lwr(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              rt: usize,
-              rs: usize,
-              offset: u32) {
+    fn op_lwr(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         if self.cop0.test_read(addr) {
@@ -1034,12 +996,7 @@ impl R3000A {
         };
     }
 
-    fn op_sb(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             rt: usize,
-             rs: usize,
-             offset: u32) {
+    fn op_sb(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
         let v = self.reg(rt);
 
@@ -1057,17 +1014,12 @@ impl R3000A {
         }
     }
 
-    fn op_sh(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             rt: usize,
-             rs: usize,
-             offset: u32) {
+    fn op_sh(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
         let v = self.reg(rt);
 
         self.execute_load_delay();
-        
+
         let cop0_break = self.cop0.test_write(addr);
 
         if addr & 0x01 != 0 {
@@ -1088,12 +1040,7 @@ impl R3000A {
         }
     }
 
-    fn op_swl(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              rt: usize,
-              rs: usize,
-              offset: u32) {
+    fn op_swl(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         if self.cop0.test_write(addr & 0xffff_fffc) {
@@ -1131,12 +1078,7 @@ impl R3000A {
         self.execute_load_delay();
     }
 
-    fn op_sw(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             rt: usize,
-             rs: usize,
-             offset: u32) {
+    fn op_sw(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
         let v = self.reg(rt);
 
@@ -1162,12 +1104,7 @@ impl R3000A {
         }
     }
 
-    fn op_swr(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              rt: usize,
-              rs: usize,
-              offset: u32) {
+    fn op_swr(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         let value = self.reg(rt);
@@ -1206,12 +1143,7 @@ impl R3000A {
         self.execute_load_delay();
     }
 
-    fn op_lwcx(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               _: usize,
-               rs: usize,
-               offset: u32) {
+    fn op_lwcx(&mut self, bus: &mut Bus, tk: &mut Timekeeper, _: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         self.execute_load_delay();
@@ -1237,12 +1169,7 @@ impl R3000A {
         }
     }
 
-    fn op_lwc2(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               rt: usize,
-               rs: usize,
-               offset: u32) {
+    fn op_lwc2(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         self.execute_load_delay();
@@ -1270,12 +1197,7 @@ impl R3000A {
         self.gte.write_data(rt, v);
     }
 
-    fn op_swcx(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               _: usize,
-               rs: usize,
-               offset: u32) {
+    fn op_swcx(&mut self, bus: &mut Bus, tk: &mut Timekeeper, _: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
 
         self.execute_load_delay();
@@ -1301,12 +1223,7 @@ impl R3000A {
         }
     }
 
-    fn op_swc2(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               rt: usize,
-               rs: usize,
-               offset: u32) {
+    fn op_swc2(&mut self, bus: &mut Bus, tk: &mut Timekeeper, rt: usize, rs: usize, offset: u32) {
         let addr = self.reg(rs).wrapping_add(offset);
         let v = self.gte.read_data(rt);
 
@@ -1340,9 +1257,7 @@ impl R3000A {
     }
 
     fn reg(&self, index: usize) -> u32 {
-        unsafe {
-            *self.regs.get_unchecked(index)
-        }
+        unsafe { *self.regs.get_unchecked(index) }
     }
 
     fn set_reg(&mut self, index: usize, value: u32) {
@@ -1362,8 +1277,9 @@ impl R3000A {
         let bt = self.exception_branch_taken;
 
         let cop = match (exception == Exception::IBusError)
-                        || (exception == Exception::DBusError)
-                        || (exception == Exception::Breakpoint) {
+            || (exception == Exception::DBusError)
+            || (exception == Exception::Breakpoint)
+        {
             true => 0,
             false => (self.current_instruction >> 26) & 0x3,
         } as u8;
@@ -1378,10 +1294,9 @@ impl R3000A {
             self.cop0.set_jumpdest(self.pc);
         }
 
-        if (exception != Exception::Interrupt)
-           && (exception != Exception::Syscall) {
-               println!("[CPU] [WARN] Unexpected exception: {:#?}", exception);
-           }
+        if (exception != Exception::Interrupt) && (exception != Exception::Syscall) {
+            println!("[CPU] [WARN] Unexpected exception: {:#?}", exception);
+        }
 
         self.cop0.enter_exception(epc, exception, bd, bt, cop);
 
@@ -1421,9 +1336,7 @@ impl R3000A {
         self.ld_slot = (index, value);
     }
 
-    fn fetch32(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper) -> (u32, bool) {
+    fn fetch32(&mut self, bus: &mut Bus, tk: &mut Timekeeper) -> (u32, bool) {
         let pc = self.pc;
         let physical_address = R3000A::translate_address(pc);
 
@@ -1432,7 +1345,7 @@ impl R3000A {
             let tag = pc & 0x7ffff000;
 
             let line = ((pc & 0xff0) >> 4) as usize;
-            let index = ((pc & 0xc) >> 2) as usize; 
+            let index = ((pc & 0xc) >> 2) as usize;
 
             let cline = unsafe { self.icache.lines.get_unchecked_mut(line) };
 
@@ -1481,15 +1394,18 @@ impl R3000A {
         (self.cache_control & 0x4) != 0
     }
 
-    fn load(&mut self,
-            bus: &mut Bus,
-            tk: &mut Timekeeper,
-            width: BusWidth, address: u32) -> (u32, bool) {
+    fn load(
+        &mut self,
+        bus: &mut Bus,
+        tk: &mut Timekeeper,
+        width: BusWidth,
+        address: u32,
+    ) -> (u32, bool) {
         let physical_address = R3000A::translate_address(address);
 
         if self.cop0.isolate_cache() {
             let line = ((address & 0xff0) >> 4) as usize;
-            let index = ((address & 0xc) >> 2) as usize; 
+            let index = ((address & 0xc) >> 2) as usize;
 
             let cline = unsafe { self.icache.lines.get_unchecked(line) };
 
@@ -1509,40 +1425,35 @@ impl R3000A {
         }
     }
 
-    fn load8(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             address: u32) -> (u8, bool) {
-        let (val, error) =  self.load(bus, tk, BusWidth::BYTE, address);
+    fn load8(&mut self, bus: &mut Bus, tk: &mut Timekeeper, address: u32) -> (u8, bool) {
+        let (val, error) = self.load(bus, tk, BusWidth::BYTE, address);
 
         (val as u8, error)
     }
 
-    fn load16(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              address: u32) -> (u16, bool) {
+    fn load16(&mut self, bus: &mut Bus, tk: &mut Timekeeper, address: u32) -> (u16, bool) {
         let (val, error) = self.load(bus, tk, BusWidth::HALF, address);
 
         (val as u16, error)
     }
 
-    fn load32(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              address: u32) -> (u32, bool) {
+    fn load32(&mut self, bus: &mut Bus, tk: &mut Timekeeper, address: u32) -> (u32, bool) {
         self.load(bus, tk, BusWidth::WORD, address)
     }
 
-    fn store(&mut self,
-             bus: &mut Bus,
-             tk: &mut Timekeeper,
-             width: BusWidth, address: u32, value: u32) -> bool {
+    fn store(
+        &mut self,
+        bus: &mut Bus,
+        tk: &mut Timekeeper,
+        width: BusWidth,
+        address: u32,
+        value: u32,
+    ) -> bool {
         let physical_address = R3000A::translate_address(address);
 
         if self.cop0.isolate_cache() {
             let line = ((address & 0xff0) >> 4) as usize;
-            let index = ((address & 0xc) >> 2) as usize; 
+            let index = ((address & 0xc) >> 2) as usize;
 
             let tag_test = self.icache_tag_test();
 
@@ -1565,36 +1476,24 @@ impl R3000A {
             0x1f80_1080..=0x1f80_10ff => {
                 self.dmac.write(bus.intc(), address, value);
                 false
-            },
+            }
             0xfffe_0130 => {
                 self.cache_control = value;
                 false
-            },
+            }
             _ => unsafe { bus.store(tk, width, physical_address, value) },
         }
     }
 
-    fn store8(&mut self,
-              bus: &mut Bus,
-              tk: &mut Timekeeper,
-              address: u32,
-              value: u32) -> bool {
+    fn store8(&mut self, bus: &mut Bus, tk: &mut Timekeeper, address: u32, value: u32) -> bool {
         self.store(bus, tk, BusWidth::BYTE, address, value)
     }
 
-    fn store16(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               address: u32,
-               value: u32) -> bool {
+    fn store16(&mut self, bus: &mut Bus, tk: &mut Timekeeper, address: u32, value: u32) -> bool {
         self.store(bus, tk, BusWidth::HALF, address, value)
     }
 
-    fn store32(&mut self,
-               bus: &mut Bus,
-               tk: &mut Timekeeper,
-               address: u32,
-               value: u32) -> bool {
+    fn store32(&mut self, bus: &mut Bus, tk: &mut Timekeeper, address: u32, value: u32) -> bool {
         self.store(bus, tk, BusWidth::WORD, address, value)
     }
 }

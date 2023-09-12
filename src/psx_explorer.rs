@@ -1,9 +1,8 @@
 use eframe::egui;
-use egui::{Color32, RichText, ColorImage};
+use egui::{Color32, ColorImage, RichText};
+use image::{Rgb, RgbImage};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use image::{RgbImage, Rgb};
-
 
 // Emu system
 mod gpu_viewer;
@@ -68,7 +67,6 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         egui::CentralPanel::default().show(ctx, |ui| {
             // Get frame buffer
             let (width, height) = self.system.get_display_size();
@@ -93,14 +91,19 @@ impl eframe::App for MyApp {
 
             // Load texture
             //let img = ColorImage::from_rgb([width, height], &framebuffer);
-            let img = image::imageops::resize(&img, new_width, new_height, image::imageops::FilterType::Lanczos3);
+            let img = image::imageops::resize(
+                &img,
+                new_width,
+                new_height,
+                image::imageops::FilterType::Lanczos3,
+            );
             let img = ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
             let texture = ctx.load_texture(
-                    "my-image",
-                    //egui::ColorImage::example(),
-                    //img.as_flat_samples(),
-                    img,
-                    Default::default()
+                "my-image",
+                //egui::ColorImage::example(),
+                //img.as_flat_samples(),
+                img,
+                Default::default(),
             );
 
             // Show frame
@@ -179,8 +182,7 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_square = true;
                 }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 102, 102));
-                if ui.button("○").clicked()
-                {
+                if ui.button("○").clicked() {
                     self.system.get_controller().button_circle = true;
                 }
             });

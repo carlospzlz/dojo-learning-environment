@@ -227,9 +227,8 @@ static COMMAND_NAMES: [&'static str; 32] = [
     "? 0x1c",
     "? 0x1d",
     "CdlGetTOC",
-    "? 0x1f"
+    "? 0x1f",
 ];
-
 
 pub struct Cdrom {
     index: CdromIndex,
@@ -396,8 +395,7 @@ impl Cdrom {
         }
     }
 
-    pub fn reset(&mut self) {
-    }
+    pub fn reset(&mut self) {}
 
     pub fn tick(&mut self, intc: &mut Intc, spu: &mut Spu, clocks: usize) {
         self.tick_second_response(clocks);
@@ -425,7 +423,7 @@ impl Cdrom {
                         self.controller_mode = CdromControllerMode::CommandTransfer;
                     }
                 }
-                
+
                 self.controller_counter += clocks as isize;
             }
             CdromControllerMode::ParameterTransfer => {
@@ -665,7 +663,7 @@ impl Cdrom {
                             self.controller_mode = CdromControllerMode::ResponseClear;
                             self.controller_counter += 10;
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
 
@@ -721,11 +719,18 @@ impl Cdrom {
 
                 let mut mode = CdromSectorMode::Adpcm;
 
-                if !self.mode_adpcm || (subheader.mode() != CdromSubheaderMode::Audio) || !subheader.realtime() {
+                if !self.mode_adpcm
+                    || (subheader.mode() != CdromSubheaderMode::Audio)
+                    || !subheader.realtime()
+                {
                     mode = CdromSectorMode::Data;
                 }
 
-                if mode == CdromSectorMode::Adpcm && self.mode_filter && ((self.filter_file != subheader.file) || (self.filter_channel != subheader.channel)) {
+                if mode == CdromSectorMode::Adpcm
+                    && self.mode_filter
+                    && ((self.filter_file != subheader.file)
+                        || (self.filter_channel != subheader.channel))
+                {
                     mode = CdromSectorMode::Ignore;
                 }
 
@@ -789,20 +794,25 @@ impl Cdrom {
                         let times = match sampling_rate {
                             18900 => 2,
                             37800 => 1,
-                            _ => unreachable!()
+                            _ => unreachable!(),
                         };
 
                         for channel in 0..channels {
                             for _ in 0..times {
                                 for i in 0..self.adpcm_buffers[channel].len() {
-                                    self.ringbuf[channel][i & 0x1f] = self.adpcm_buffers[channel][i];
+                                    self.ringbuf[channel][i & 0x1f] =
+                                        self.adpcm_buffers[channel][i];
                                     self.sixstep += 1;
 
                                     if self.sixstep == 6 {
                                         self.sixstep = 0;
 
                                         for j in 0..7 {
-                                            let sample = self.zigzag_interpolate(i + 1, self.ringbuf[channel], ADPCM_ZIGZAG_TABLE[j]);
+                                            let sample = self.zigzag_interpolate(
+                                                i + 1,
+                                                self.ringbuf[channel],
+                                                ADPCM_ZIGZAG_TABLE[j],
+                                            );
 
                                             match (channel, channels) {
                                                 (_, 1) => spu.cd_push(sample, sample),
@@ -839,13 +849,14 @@ impl Cdrom {
                         //self.controller_mode = CdromControllerMode::ResponseClear;
                         //self.controller_counter += 10;
                     }
-                    CdromSectorMode::Ignore => {}, // Sector is skipped by Cdrom controller
+                    CdromSectorMode::Ignore => {} // Sector is skipped by Cdrom controller
                 };
 
-                self.drive_counter += 44100 / match self.mode_double_speed {
-                    true => 150,
-                    false => 75,
-                };
+                self.drive_counter += 44100
+                    / match self.mode_double_speed {
+                        true => 150,
+                        false => 75,
+                    };
             }
         };
     }
@@ -867,7 +878,7 @@ impl Cdrom {
                 2 => i & 0x1,
                 _ => unreachable!(),
             };
-            
+
             self.decode_adpcm_block(data, channel, i);
         }
     }
@@ -1082,12 +1093,18 @@ impl Cdrom {
             0x11 => {
                 self.controller_response_buffer.push(self.last_subq.track);
                 self.controller_response_buffer.push(self.last_subq.index);
-                self.controller_response_buffer.push(u8_to_bcd(self.last_subq.mm));
-                self.controller_response_buffer.push(u8_to_bcd(self.last_subq.ss));
-                self.controller_response_buffer.push(u8_to_bcd(self.last_subq.ff));
-                self.controller_response_buffer.push(u8_to_bcd(self.last_subq.amm));
-                self.controller_response_buffer.push(u8_to_bcd(self.last_subq.ass));
-                self.controller_response_buffer.push(u8_to_bcd(self.last_subq.aff));
+                self.controller_response_buffer
+                    .push(u8_to_bcd(self.last_subq.mm));
+                self.controller_response_buffer
+                    .push(u8_to_bcd(self.last_subq.ss));
+                self.controller_response_buffer
+                    .push(u8_to_bcd(self.last_subq.ff));
+                self.controller_response_buffer
+                    .push(u8_to_bcd(self.last_subq.amm));
+                self.controller_response_buffer
+                    .push(u8_to_bcd(self.last_subq.ass));
+                self.controller_response_buffer
+                    .push(u8_to_bcd(self.last_subq.aff));
 
                 //self.controller_counter += 37937;
             }

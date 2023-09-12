@@ -103,7 +103,7 @@ const UNR_TABLE: [u8; 0x101] = [
     0x19, 0x19, 0x18, 0x18, 0x17, 0x16, 0x16, 0x15, 0x15, 0x14, 0x14, 0x13, 0x12, 0x12, 0x11, 0x11,
     0x10, 0x0F, 0x0F, 0x0E, 0x0E, 0x0D, 0x0D, 0x0C, 0x0C, 0x0B, 0x0A, 0x0A, 0x09, 0x09, 0x08, 0x08,
     0x07, 0x07, 0x06, 0x06, 0x05, 0x05, 0x04, 0x04, 0x03, 0x03, 0x02, 0x02, 0x01, 0x01, 0x00, 0x00,
-    0x00 
+    0x00,
 ];
 
 pub struct Gte {
@@ -611,10 +611,10 @@ impl Gte {
         let mac2 = self.mac[2];
         let mac3 = self.mac[3];
 
-		let lm1 = self.lm_b(1, mac1, false) as i64;
-		let lm2 = self.lm_b(2, mac2, false) as i64;
-		let lm3 = self.lm_b(3, mac3, false) as i64;
-		
+        let lm1 = self.lm_b(1, mac1, false) as i64;
+        let lm2 = self.lm_b(2, mac2, false) as i64;
+        let lm3 = self.lm_b(3, mac3, false) as i64;
+
         self.mac[1] = (self.a(1, r * ir1 + ir0 * lm1) >> self.sf) as i32;
         self.mac[2] = (self.a(2, g * ir2 + ir0 * lm2) >> self.sf) as i32;
         self.mac[3] = (self.a(3, b * ir3 + ir0 * lm3) >> self.sf) as i32;
@@ -694,10 +694,10 @@ impl Gte {
         let mac2 = self.mac[2];
         let mac3 = self.mac[3];
 
-		let lm1 = self.lm_b(1, mac1, false) as i64;
-		let lm2 = self.lm_b(2, mac2, false) as i64;
-		let lm3 = self.lm_b(3, mac3, false) as i64;
-		
+        let lm1 = self.lm_b(1, mac1, false) as i64;
+        let lm2 = self.lm_b(2, mac2, false) as i64;
+        let lm3 = self.lm_b(3, mac3, false) as i64;
+
         self.mac[1] = (self.a(1, r * ir1 + ir0 * lm1) >> self.sf) as i32;
         self.mac[2] = (self.a(2, g * ir2 + ir0 * lm2) >> self.sf) as i32;
         self.mac[3] = (self.a(3, b * ir3 + ir0 * lm3) >> self.sf) as i32;
@@ -1441,7 +1441,7 @@ impl Gte {
         let u = UNR_TABLE[(d as usize - 0x7fc0) >> 7] as u64 + 0x101;
         let d2 = (0x2000080 - (d * u)) >> 8;
         let d3 = (0x80 + (d2 * u)) >> 8;
-        cmp::min(0x1ffff, (((n*d3) + 0x8000) >> 16) as u32)
+        cmp::min(0x1ffff, (((n * d3) + 0x8000) >> 16) as u32)
     }
 
     fn push_sx(&mut self, sx: i16) {

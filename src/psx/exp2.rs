@@ -11,9 +11,7 @@ pub struct Exp2 {
 
 impl Exp2 {
     pub fn new() -> Exp2 {
-        Exp2 {
-            tx_buf: Vec::new(),
-        }
+        Exp2 { tx_buf: Vec::new() }
     }
 
     fn tx_byte(&mut self, byte: u8) {

@@ -70,20 +70,20 @@ impl Dcic {
 
     pub fn read(&self) -> u32 {
         (self.trap as u32) << 31
-        | (self.user_debug as u32) << 30
-        | (self.kernel_debug as u32) << 29
-        | (self.trace as u32) << 28
-        | (self.data_write as u32) << 27
-        | (self.data_read as u32) << 26
-        | (self.data_breakpoint as u32) << 25
-        | (self.code_breakpoint as u32) << 24
-        | (self.master_debug as u32) << 23
-        | (self.hit_trace as u32) << 5
-        | (self.hit_write as u32) << 4
-        | (self.hit_read as u32) << 3
-        | (self.hit_data as u32) << 2
-        | (self.hit_code as u32) << 1
-        | (self.hit_debug as u32)
+            | (self.user_debug as u32) << 30
+            | (self.kernel_debug as u32) << 29
+            | (self.trace as u32) << 28
+            | (self.data_write as u32) << 27
+            | (self.data_read as u32) << 26
+            | (self.data_breakpoint as u32) << 25
+            | (self.code_breakpoint as u32) << 24
+            | (self.master_debug as u32) << 23
+            | (self.hit_trace as u32) << 5
+            | (self.hit_write as u32) << 4
+            | (self.hit_read as u32) << 3
+            | (self.hit_data as u32) << 2
+            | (self.hit_code as u32) << 1
+            | (self.hit_debug as u32)
     }
 
     pub fn write(&mut self, value: u32) {
@@ -167,24 +167,24 @@ impl Status {
 
     pub fn read(&self) -> u32 {
         (self.coprocessor_usability[3] as u32) << 31
-        | (self.coprocessor_usability[2] as u32) << 30
-        | (self.coprocessor_usability[1] as u32) << 29
-        | (self.coprocessor_usability[0] as u32) << 28
-        | (self.reverse_endianness as u32) << 25
-        | (self.bootstrap_exception_vector as u32) << 22
-        | (self.tlb_shutdown as u32) << 21
-        | (self.parity_error as u32) << 20
-        | (self.cache_miss as u32) << 19
-        | (self.parity_zero as u32) << 18
-        | (self.swap_caches as u32) << 17
-        | (self.isolate_cache as u32) << 16
-        | (self.interrupt_mask as u32) << 8
-        | (self.kernel_user_old as u32) << 5
-        | (self.interrupt_enable_old as u32) << 4
-        | (self.kernel_user_previous as u32) << 3
-        | (self.interrupt_enable_previous as u32) << 2
-        | (self.kernel_user_current as u32) << 1
-        | (self.interrupt_enable_current as u32)
+            | (self.coprocessor_usability[2] as u32) << 30
+            | (self.coprocessor_usability[1] as u32) << 29
+            | (self.coprocessor_usability[0] as u32) << 28
+            | (self.reverse_endianness as u32) << 25
+            | (self.bootstrap_exception_vector as u32) << 22
+            | (self.tlb_shutdown as u32) << 21
+            | (self.parity_error as u32) << 20
+            | (self.cache_miss as u32) << 19
+            | (self.parity_zero as u32) << 18
+            | (self.swap_caches as u32) << 17
+            | (self.isolate_cache as u32) << 16
+            | (self.interrupt_mask as u32) << 8
+            | (self.kernel_user_old as u32) << 5
+            | (self.interrupt_enable_old as u32) << 4
+            | (self.kernel_user_previous as u32) << 3
+            | (self.interrupt_enable_previous as u32) << 2
+            | (self.kernel_user_current as u32) << 1
+            | (self.interrupt_enable_current as u32)
     }
 
     pub fn write(&mut self, value: u32) {
@@ -258,10 +258,10 @@ impl Cause {
 
     pub fn read(&self) -> u32 {
         (self.branch_delay as u32) << 31
-        | (self.branch_taken as u32) << 30
-        | ((self.coprocessor_exception & 0x03) as u32) << 28
-        | (self.interrupt_pending as u32) << 8
-        | ((self.exception_code & 0x1f) as u32) << 2
+            | (self.branch_taken as u32) << 30
+            | ((self.coprocessor_exception & 0x03) as u32) << 28
+            | (self.interrupt_pending as u32) << 8
+            | ((self.exception_code & 0x1f) as u32) << 2
     }
 
     pub fn write(&mut self, value: u32) {
@@ -347,21 +347,21 @@ impl Cop0 {
             3 => {
                 self.bpc = value;
                 //println!("Setting BPC to 0x{:08x}", self.bpc);
-            },
+            }
             5 => {
                 self.bda = value;
                 //println!("Setting BDA to 0x{:08x}", self.bda);
-            },
+            }
             6 => (),
             7 => self.dcic.write(value),
             9 => {
                 self.bdam = value;
                 //println!("Setting BDAM to 0x{:08x}", self.bdam);
-            },
+            }
             11 => {
                 self.bpcm = value;
                 //println!("Setting BPCM to 0x{:08x}", self.bpcm);
-            },
+            }
             12 => self.status.write(value),
             13 => self.cause.write(value),
             _ => panic!(
@@ -371,7 +371,14 @@ impl Cop0 {
         }
     }
 
-    pub fn enter_exception(&mut self, epc: u32, exception: Exception, bd: bool, bt: bool, coprocessor: u8) {
+    pub fn enter_exception(
+        &mut self,
+        epc: u32,
+        exception: Exception,
+        bd: bool,
+        bt: bool,
+        coprocessor: u8,
+    ) {
         self.epc = epc;
         self.status.enter_exception();
         self.cause.enter_exception(exception, bd, bt, coprocessor);
@@ -409,8 +416,7 @@ impl Cop0 {
         let kernel = test >= 0x8000_0000;
         let user = !kernel;
 
-        if !(self.dcic.kernel_debug && kernel)
-            && !(self.dcic.user_debug && user) {
+        if !(self.dcic.kernel_debug && kernel) && !(self.dcic.user_debug && user) {
             return false;
         }
 
@@ -436,8 +442,7 @@ impl Cop0 {
         let kernel = test >= 0x8000_0000;
         let user = !kernel;
 
-        if !(self.dcic.kernel_debug && kernel)
-            && !(self.dcic.user_debug && user) {
+        if !(self.dcic.kernel_debug && kernel) && !(self.dcic.user_debug && user) {
             return false;
         }
 
@@ -474,8 +479,7 @@ impl Cop0 {
         let kernel = test >= 0x8000_0000;
         let user = !kernel;
 
-        if !(self.dcic.kernel_debug && kernel)
-            && !(self.dcic.user_debug && user) {
+        if !(self.dcic.kernel_debug && kernel) && !(self.dcic.user_debug && user) {
             return false;
         }
 

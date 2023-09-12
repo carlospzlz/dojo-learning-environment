@@ -310,7 +310,7 @@ impl Voice {
             0xe => {
                 self.repeat_address = (value as u32) * 8;
                 self.repeat_address_written = true;
-            },
+            }
             _ => panic!(
                 "[SPU] [ERROR] Write to invalid voice register: 0x{:x}",
                 offset

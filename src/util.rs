@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-use byteorder::{ByteOrder, LittleEndian}; 
+use byteorder::{ByteOrder, LittleEndian};
 
 pub fn bcd_to_u8(value: u8) -> u8 {
     ((value >> 4) * 10) + (value & 0xf)

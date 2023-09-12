@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 
-use super::Bus;
 use super::super::intc::{Intc, Interrupt};
+use super::Bus;
 
 #[derive(Clone, Copy)]
 pub enum SyncMode {
@@ -220,7 +220,7 @@ impl Dmac {
             channels: [DmacChannel::new(); 7],
             control: 0x07654321,
             interrupt: 0,
-            
+
             gap_ticks: 0,
             gap_started: false,
 
@@ -429,11 +429,17 @@ impl Dmac {
         let direction = channel.direction();
 
         if direction != Direction::FromRam {
-            panic!("[DMAC] [ERROR] Unsupported direction {:?} for linked list transfer", direction);
+            panic!(
+                "[DMAC] [ERROR] Unsupported direction {:?} for linked list transfer",
+                direction
+            );
         }
 
         if port != DmacPort::GPU {
-            panic!("[DMAC] [ERROR] Unsupported {:?} for linked list transfer", port);
+            panic!(
+                "[DMAC] [ERROR] Unsupported {:?} for linked list transfer",
+                port
+            );
         }
 
         if self.gap_ticks > 0 {

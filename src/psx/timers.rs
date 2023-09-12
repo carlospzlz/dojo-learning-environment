@@ -98,11 +98,7 @@ pub struct Timers {
 impl Timers {
     pub fn new() -> Timers {
         Timers {
-            counter: [
-                Counter::new(),
-                Counter::new(),
-                Counter::new(),
-            ],
+            counter: [Counter::new(), Counter::new(), Counter::new()],
 
             vblank: false,
             hblank: false,

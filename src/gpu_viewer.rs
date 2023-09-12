@@ -78,17 +78,15 @@ pub enum GpuCommand {
 impl GpuCommand {
     pub fn name(command: &GpuCommand) -> &'static str {
         match command {
-            GpuCommand::Polygon(p) => {
-                match (p.shaded, p.textured, p.quad) {
-                    (false, false, false) => "Monochrome Triangle",
-                    (false, false, true) => "Monochrome Quad",
-                    (false, true, false) => "Textured Triangle",
-                    (false, true, true) => "Textured Quad",
-                    (true, false, false) => "Shaded Triangle",
-                    (true, false, true) => "Shaded Quad",
-                    (true, true, false) => "Shaded Textured Triangle",
-                    (true, true, true) => "Shaded Textured Quad",
-                }
+            GpuCommand::Polygon(p) => match (p.shaded, p.textured, p.quad) {
+                (false, false, false) => "Monochrome Triangle",
+                (false, false, true) => "Monochrome Quad",
+                (false, true, false) => "Textured Triangle",
+                (false, true, true) => "Textured Quad",
+                (true, false, false) => "Shaded Triangle",
+                (true, false, true) => "Shaded Quad",
+                (true, true, false) => "Shaded Textured Triangle",
+                (true, true, true) => "Shaded Textured Quad",
             },
         }
     }

@@ -67,35 +67,35 @@ impl Controller {
                 } else {
                     self.state = 0;
                 }
-            },
+            }
             2 => {
                 reply = 0x5a;
                 self.state = 3;
-            },
+            }
             3 => {
                 reply = self.get_switch_state_lo();
                 self.state = 4;
-            },
+            }
             4 => {
                 reply = self.get_switch_state_hi();
                 self.state = if self.digital_mode { 0 } else { 5 };
-            },
+            }
             5 => {
                 reply = self.axis_rx;
                 self.state = 6;
-            },
+            }
             6 => {
                 reply = self.axis_ry;
                 self.state = 7;
-            },
+            }
             7 => {
                 reply = self.axis_lx;
                 self.state = 8;
-            },
+            }
             8 => {
                 reply = self.axis_ly;
                 self.state = 0;
-            },
+            }
             _ => panic!("[CONTROLLER] [ERROR] Unknown state: {}", self.state),
         };
 

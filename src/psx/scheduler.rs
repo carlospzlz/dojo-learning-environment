@@ -46,10 +46,8 @@ impl Scheduler {
             timestamp: self.timestamp + ticks,
         });
 
-        self.events.sort_by(|a, b| { a.timestamp.cmp(&b.timestamp) });
+        self.events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
     }
 
-    pub fn remove_event(&mut self) {
-        
-    }
+    pub fn remove_event(&mut self) {}
 }

@@ -11,14 +11,9 @@ const MDEC_QT_UV: usize = 0;
 const MDEC_QT_Y: usize = 1;
 
 const MDEC_ZAGZIG: [usize; 64] = [
-     0,  1,  8, 16,  9,  2,  3, 10,
-    17, 24, 32, 25, 18, 11,  4,  5,
-    12, 19, 26, 33, 40, 48, 41, 34,
-    27, 20, 13,  6,  7, 14, 21, 28,
-    35, 42, 49, 56, 57, 50, 43, 36,
-    29, 22, 15, 23, 30, 37, 44, 51,
-    58, 59, 52, 45, 38, 31, 39, 46,
-    53, 60, 61, 54, 47, 55, 62, 63,
+    0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20,
+    13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59,
+    52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
 ];
 
 pub struct Mdec {
@@ -130,7 +125,11 @@ impl Mdec {
             k += (data >> 10) as usize + 1;
 
             if k <= 63 {
-                dc = ((util::sign_extend_u16(data & 0x3ff, 10) as i16) * (quant[k] as i16) * (quant_factor as i16) + 4) >> 3;
+                dc = ((util::sign_extend_u16(data & 0x3ff, 10) as i16)
+                    * (quant[k] as i16)
+                    * (quant_factor as i16)
+                    + 4)
+                    >> 3;
                 continue;
             }
 
@@ -152,9 +151,10 @@ impl Mdec {
                     let mut sum = 0;
 
                     for z in 0..8 {
-                        sum += (src[y + z * 8] as i32) * ((self.scale_table[x + z * 8] as i32) >> 3);
+                        sum +=
+                            (src[y + z * 8] as i32) * ((self.scale_table[x + z * 8] as i32) >> 3);
                     }
-                    
+
                     dst[x + y * 8] = ((sum + 0xfff) >> 13) as i16;
                 }
             }
@@ -224,15 +224,15 @@ impl Mdec {
                             0 => {
                                 finished = self.decode_block(MDEC_BLK_Y, MDEC_QT_Y);
                                 self.yuv_to_rgb(&mut output, 0, 0);
-                            },
+                            }
                             1 => {
-                                finished =  self.decode_block(MDEC_BLK_Y, MDEC_QT_Y);
+                                finished = self.decode_block(MDEC_BLK_Y, MDEC_QT_Y);
                                 self.yuv_to_rgb(&mut output, 8, 0);
-                            },
+                            }
                             2 => {
                                 finished = self.decode_block(MDEC_BLK_Y, MDEC_QT_Y);
                                 self.yuv_to_rgb(&mut output, 0, 8);
-                            },
+                            }
                             3 => {
                                 finished = self.decode_block(MDEC_BLK_Y, MDEC_QT_Y);
                                 self.yuv_to_rgb(&mut output, 8, 8);
@@ -246,7 +246,7 @@ impl Mdec {
                                         self.data_out.push_back(output[i]);
                                     }
                                 }
-                            },
+                            }
                             4 => finished = self.decode_block(MDEC_BLK_CR, MDEC_QT_UV),
                             5 => finished = self.decode_block(MDEC_BLK_CB, MDEC_QT_UV),
                             _ => unreachable!(),

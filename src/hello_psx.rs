@@ -4,6 +4,4 @@ mod psx;
 pub mod queue;
 pub mod util;
 
-fn main() {
-
-}
+fn main() {}

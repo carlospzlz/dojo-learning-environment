@@ -207,7 +207,7 @@ impl Peripherals {
             //    response = self.mem_card1.response(command);
             //    ack = self.mem_card1.ack();
             //    enable = self.mem_card1.enable();
-//
+            //
             //    if ack {
             //        self.interrupt_timer = 700;
             //    }

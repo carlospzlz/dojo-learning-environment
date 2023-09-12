@@ -20,8 +20,8 @@ use crate::gpu_viewer::GpuFrame;
 use crate::util;
 
 use self::bus::Bus;
-use self::peripherals::controller::Controller;
 use self::cpu::R3000A;
+use self::peripherals::controller::Controller;
 use self::timekeeper::Timekeeper;
 
 pub struct System {
@@ -113,9 +113,7 @@ impl System {
         self.bus.gpu().get_display_size()
     }
 
-    pub fn get_framebuffer(&self,
-                           data: &mut [u8],
-                           draw_full_vram: bool) {
+    pub fn get_framebuffer(&self, data: &mut [u8], draw_full_vram: bool) {
         self.bus.gpu().get_framebuffer(data, draw_full_vram)
     }
 

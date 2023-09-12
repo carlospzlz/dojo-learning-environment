@@ -6,8 +6,8 @@ use super::cdrom::Cdrom;
 use super::exp2::Exp2;
 use super::gpu::Gpu;
 use super::intc::Intc;
-use super::peripherals::Peripherals;
 use super::mdec::Mdec;
+use super::peripherals::Peripherals;
 use super::spu::Spu;
 use super::timekeeper::{Device, Timekeeper};
 use super::timers::Timers;
@@ -131,15 +131,22 @@ impl Bus {
         match device {
             Device::Gpu => self.gpu.tick(intc, &mut self.timers, cycles),
             Device::Cdrom => self.cdrom.tick(intc, &mut self.spu, cycles),
-            Device::Spu => for _ in 0..cycles {
-                self.spu.tick(intc);
-            },
+            Device::Spu => {
+                for _ in 0..cycles {
+                    self.spu.tick(intc);
+                }
+            }
             Device::Timers => self.timers.tick(intc, cycles),
             Device::Peripherals => self.peripherals.tick(intc, cycles),
         };
     }
 
-    pub unsafe fn load(&mut self, tk: &mut Timekeeper, width: BusWidth, address: u32) -> (u32, bool) {
+    pub unsafe fn load(
+        &mut self,
+        tk: &mut Timekeeper,
+        width: BusWidth,
+        address: u32,
+    ) -> (u32, bool) {
         let mut error = false;
 
         let value = match address {
@@ -151,13 +158,13 @@ impl Bus {
                     BusWidth::HALF => {
                         let slice = self.ram.get_unchecked(offset & !0x1..);
                         LittleEndian::read_u16(slice) as u32
-                    },
+                    }
                     BusWidth::WORD => {
                         let slice = self.ram.get_unchecked(offset & !0x3..);
                         LittleEndian::read_u32(slice) as u32
-                    },
+                    }
                 }
-            },
+            }
             0x1f00_0000..=0x1f7f_ffff => 0xffff_ffff, //println!("[MMU] [INFO] Load from EXPENSION_1 region address: 0x{:08x}", address); 0xffff_ffff },
             0x1f80_0000..=0x1f80_03ff => {
                 let offset = (address - 0x1f80_0000) as usize;
@@ -167,19 +174,19 @@ impl Bus {
                     BusWidth::HALF => {
                         let slice = self.scratchpad.get_unchecked(offset & !0x1..);
                         LittleEndian::read_u16(slice) as u32
-                    },
+                    }
                     BusWidth::WORD => {
                         let slice = self.scratchpad.get_unchecked(offset & !0x3..);
                         LittleEndian::read_u32(slice)
-                    },
+                    }
                 }
-            },
+            }
             0x1f80_1014 => 0x2009_31e1,
             0x1f80_1060 => 0x0000_0b88,
             0x1f80_1040 => {
                 tk.sync_device(self, Device::Peripherals);
                 self.peripherals.rx_data()
-            },
+            }
             0x1f80_1044 => {
                 tk.sync_device(self, Device::Peripherals);
                 self.peripherals.status()
@@ -231,7 +238,7 @@ impl Bus {
                     BusWidth::HALF => self.spu.read16(address) as u32,
                     BusWidth::WORD => self.spu.read32(address) as u32,
                 }
-            },
+            }
             0x1f80_2000..=0x1f80_207f => self.exp2.read8(address) as u32,
             0x1fc0_0000..=0x1fc7_ffff => {
                 let offset = (address - 0x1fc0_0000) as usize;
@@ -241,14 +248,17 @@ impl Bus {
                     BusWidth::HALF => {
                         let slice = self.bios.get_unchecked(offset & !0x1..);
                         LittleEndian::read_u16(slice) as u32
-                    },
+                    }
                     BusWidth::WORD => {
                         let slice = self.bios.get_unchecked(offset & !0x3..);
                         LittleEndian::read_u32(slice) as u32
-                    },
+                    }
                 }
-            },
-            _ => { error = true; 0 },
+            }
+            _ => {
+                error = true;
+                0
+            }
         };
 
         (value, error)
@@ -258,25 +268,34 @@ impl Bus {
         if (address & 0x3) != 0 {
             panic!("[RECOMPILER] [ERROR] Unaligned address: 0x{:08x}", address);
         }
-    
+
         match address {
             0x0000_0000..=0x007f_ffff => {
                 let offset = (address & 0x1f_fffc) as usize;
                 LittleEndian::read_u32(&self.ram[offset..])
-            },
+            }
             0x1f80_0000..=0x1f80_03ff => {
                 let offset = ((address - 0x1f80_0000) & !0x3) as usize;
                 LittleEndian::read_u32(&self.scratchpad[offset..])
-            },
+            }
             0x1fc0_0000..=0x1fc7_ffff => {
                 let offset = (address as usize - 0x1fc0_0000) & !0x3;
                 LittleEndian::read_u32(&self.bios[offset..])
-            },
-            _ => panic!("[RECOMPILER] [ERROR] Unrecognised address: 0x{:08x}", address),
+            }
+            _ => panic!(
+                "[RECOMPILER] [ERROR] Unrecognised address: 0x{:08x}",
+                address
+            ),
         }
     }
 
-    pub unsafe fn store(&mut self, tk: &mut Timekeeper, width: BusWidth, address: u32, value: u32) -> bool {
+    pub unsafe fn store(
+        &mut self,
+        tk: &mut Timekeeper,
+        width: BusWidth,
+        address: u32,
+        value: u32,
+    ) -> bool {
         let mut error = false;
 
         match address {
@@ -298,17 +317,17 @@ impl Bus {
             0x1f00_0000..=0x1f7f_ffff => (), //println!("[MMU] [INFO] Store to EXPENSION_1 region address: 0x{:08x}", address);
             0x1f80_0000..=0x1f80_03ff => {
                 let offset = (address - 0x1f80_0000) as usize;
-                
+
                 match width {
                     BusWidth::BYTE => *self.scratchpad.get_unchecked_mut(offset) = value as u8,
                     BusWidth::HALF => {
                         let slice = &mut self.scratchpad.get_unchecked_mut(offset & !0x1..);
                         LittleEndian::write_u16(slice, value as u16);
-                    },
+                    }
                     BusWidth::WORD => {
                         let slice = &mut self.scratchpad.get_unchecked_mut(offset & !0x3..);
                         LittleEndian::write_u32(slice, value);
-                    },
+                    }
                 }
             }
             0x1f80_1000..=0x1f80_1023 => (), //println!("[BUS] [INFO] Store to MEM_CTRL region address: 0x{:08x}", address),
@@ -361,18 +380,16 @@ impl Bus {
                     BusWidth::HALF => self.spu.write16(address, value as u16),
                     _ => panic!("[BUS] [ERROR] Unsupported SPU width"),
                 }
-            },
+            }
             0x1f80_2000..=0x1f80_207f => self.exp2.write8(address, value as u8),
             _ => {
                 error = true;
                 //println!("[BUS] [ERROR] Store to unrecognised address 0x{:08x}", address)
-            },
+            }
         };
 
         error
     }
 
-    pub fn recompiler_store_word(&mut self, address: u32, value: u32) {
-        
-    }
+    pub fn recompiler_store_word(&mut self, address: u32, value: u32) {}
 }

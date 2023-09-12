@@ -473,10 +473,7 @@ impl Gpu {
         (x, y)
     }
 
-    pub fn get_framebuffer(&self,
-                           framebuffer: &mut [u8],
-                           draw_full_vram: bool) {
-
+    pub fn get_framebuffer(&self, framebuffer: &mut [u8], draw_full_vram: bool) {
         let (xs, ys) = if draw_full_vram {
             (0, 0)
         } else {
@@ -786,8 +783,12 @@ impl Gpu {
                 let mut w = size & 0x3ff;
                 let mut h = (size >> 16) & 0x1ff;
 
-                if w == 0 { w = 0x400; }
-                if h == 0 { h = 0x200; }
+                if w == 0 {
+                    w = 0x400;
+                }
+                if h == 0 {
+                    h = 0x200;
+                }
 
                 for y in 0..h {
                     for x in 0..w {
@@ -1125,10 +1126,11 @@ impl Gpu {
 
         if textured {
             if (texpage.x_base != self.command_tpx)
-               || (texpage.y_base != self.command_tpy)
-               || (texpage.colour_depth != self.command_depth)
-               || (clut.x != self.command_clut_x)
-               || (clut.y != self.command_clut_y) {
+                || (texpage.y_base != self.command_tpy)
+                || (texpage.colour_depth != self.command_depth)
+                || (clut.x != self.command_clut_x)
+                || (clut.y != self.command_clut_y)
+            {
                 self.invalidate_cache();
             }
 
@@ -1159,20 +1161,28 @@ impl Gpu {
         //self.frame.add(GpuCommand::Polygon(polygon));
 
         colours[0] = Colour::from_u32(self.command_buffer[0]);
-        self.rasterise_triangle(&vertices[0..3],
-                                &colours[0..3],
-                                &texcoords[0..3],
-                                clut,
-                                shaded, textured,
-                                blend, transparency);
+        self.rasterise_triangle(
+            &vertices[0..3],
+            &colours[0..3],
+            &texcoords[0..3],
+            clut,
+            shaded,
+            textured,
+            blend,
+            transparency,
+        );
 
         if points == 4 {
-            self.rasterise_triangle(&vertices[1..4],
-                                    &colours[1..4],
-                                    &texcoords[1..4],
-                                    clut,
-                                    shaded, textured,
-                                    blend, transparency);
+            self.rasterise_triangle(
+                &vertices[1..4],
+                &colours[1..4],
+                &texcoords[1..4],
+                clut,
+                shaded,
+                textured,
+                blend,
+                transparency,
+            );
         }
     }
 
@@ -1214,10 +1224,11 @@ impl Gpu {
             clut = Gpu::to_clut(self.command_buffer[pos]);
 
             if (texpage.x_base != self.command_tpx)
-               || (texpage.y_base != self.command_tpy)
-               || (texpage.colour_depth != self.command_depth)
-               || (clut.x != self.command_clut_x)
-               || (clut.y != self.command_clut_y) {
+                || (texpage.y_base != self.command_tpy)
+                || (texpage.colour_depth != self.command_depth)
+                || (clut.x != self.command_clut_x)
+                || (clut.y != self.command_clut_y)
+            {
                 self.invalidate_cache();
             }
 
@@ -1237,7 +1248,7 @@ impl Gpu {
                 let y = ((tmp >> 16) & 0x1ff) as i32;
 
                 Vector2i::new(x, y)
-            },
+            }
             1 => Vector2i::new(1, 1),
             2 => Vector2i::new(8, 8),
             3 => Vector2i::new(16, 16),
@@ -1248,8 +1259,11 @@ impl Gpu {
             for x in 0..size.x {
                 let p = Vector2i::new(vertex.x + x, vertex.y + y);
 
-                if (p.x < self.drawing_x_begin) || (p.x > self.drawing_x_end)
-                   || (p.y < self.drawing_y_begin) || (p.y > self.drawing_y_end) {
+                if (p.x < self.drawing_x_begin)
+                    || (p.x > self.drawing_x_end)
+                    || (p.y < self.drawing_y_begin)
+                    || (p.y > self.drawing_y_end)
+                {
                     continue;
                 }
 
@@ -1258,7 +1272,7 @@ impl Gpu {
                 if textured {
                     let mut uv = Vector2i::new(texcoord.x + (x & 0xff), texcoord.y + (y & 0xff));
                     uv = self.mask_texcoord(uv);
-                    
+
                     let (mut texture, skip) = self.get_texture(uv, clut);
 
                     if skip {
@@ -1279,10 +1293,7 @@ impl Gpu {
         }
     }
 
-    fn interpolate_colour(area: i32, w: Vector3i,
-                          c0: Colour,
-                          c1: Colour,
-                          c2: Colour) -> Colour {
+    fn interpolate_colour(area: i32, w: Vector3i, c0: Colour, c1: Colour, c2: Colour) -> Colour {
         let r = (w.x * c0.r() + w.y * c1.r() + w.z * c2.r()) / area;
         let g = (w.x * c0.g() + w.y * c1.g() + w.z * c2.g()) / area;
         let b = (w.x * c0.b() + w.y * c1.b() + w.z * c2.b()) / area;
@@ -1290,10 +1301,13 @@ impl Gpu {
         Colour::new(r as u8, g as u8, b as u8, false)
     }
 
-    fn interpolate_texcoord(area: i32, w: Vector3i,
-                            t0: Vector2i,
-                            t1: Vector2i,
-                            t2: Vector2i) -> Vector2i {
+    fn interpolate_texcoord(
+        area: i32,
+        w: Vector3i,
+        t0: Vector2i,
+        t1: Vector2i,
+        t2: Vector2i,
+    ) -> Vector2i {
         let u = (w.x * t0.x + w.y * t1.x + w.z * t2.x) / area;
         let v = (w.x * t0.y + w.y * t1.y + w.z * t2.y) / area;
 
@@ -1304,13 +1318,17 @@ impl Gpu {
         (y < 0) || ((x < 0) && (y == 0))
     }
 
-    fn rasterise_triangle(&mut self,
-                          vertices: &[Vector2i],
-                          colours: &[Colour],
-                          texcoords: &[Vector2i],
-                          clut: Vector2i,
-                          shaded: bool, textured: bool,
-                          blend: bool, transparency: bool) {
+    fn rasterise_triangle(
+        &mut self,
+        vertices: &[Vector2i],
+        colours: &[Colour],
+        texcoords: &[Vector2i],
+        clut: Vector2i,
+        shaded: bool,
+        textured: bool,
+        blend: bool,
+        transparency: bool,
+    ) {
         let mut v = [vertices[0], vertices[1], vertices[2]];
         let mut c = [colours[0], colours[1], colours[2]];
         let mut t = [texcoords[0], texcoords[1], texcoords[2]];
@@ -1334,11 +1352,11 @@ impl Gpu {
         let mut maxy = util::max3(v[0].y, v[1].y, v[2].y);
 
         if (maxx >= 1024 && minx >= 1024) || (maxx < 0 && minx < 0) {
-                return;
+            return;
         }
 
         if (maxy >= 512 && miny >= 512) || (maxy < 0 && miny < 0) {
-                return;
+            return;
         }
 
         if maxx - minx >= 1024 {
@@ -1355,9 +1373,12 @@ impl Gpu {
         maxx = cmp::min(maxx, self.drawing_x_end);
         maxy = cmp::min(maxy, self.drawing_y_end);
 
-        let a01 = v[0].y - v[1].y; let b01 = v[1].x - v[0].x;
-        let a12 = v[1].y - v[2].y; let b12 = v[2].x - v[1].x;
-        let a20 = v[2].y - v[0].y; let b20 = v[0].x - v[2].x;
+        let a01 = v[0].y - v[1].y;
+        let b01 = v[1].x - v[0].x;
+        let a12 = v[1].y - v[2].y;
+        let b12 = v[2].x - v[1].x;
+        let a20 = v[2].y - v[0].y;
+        let b20 = v[0].x - v[2].x;
 
         let mut p = Vector2i::new(minx, miny);
 
@@ -1391,7 +1412,7 @@ impl Gpu {
                     if textured {
                         let mut uv = Gpu::interpolate_texcoord(area, w, t[0], t[1], t[2]);
                         uv = self.mask_texcoord(uv);
-                        
+
                         let (mut texture, skip) = self.get_texture(uv, clut);
 
                         if skip {
@@ -1430,8 +1451,7 @@ impl Gpu {
         }
     }
 
-    fn render_pixel(&mut self, p: Vector2i, c: Colour,
-                    transparency: bool, force_blend: bool) {
+    fn render_pixel(&mut self, p: Vector2i, c: Colour, transparency: bool, force_blend: bool) {
         let address = Gpu::vram_address(p.x as u32, p.y as u32);
         let back = Colour::from_u16(LittleEndian::read_u16(&self.vram[address..]));
 
@@ -1442,7 +1462,9 @@ impl Gpu {
         }
 
         if (force_blend || c.a) && transparency {
-            let r; let g; let b;
+            let r;
+            let g;
+            let b;
 
             match self.texpage.semi_transparency {
                 SemiTransparency::Half => {

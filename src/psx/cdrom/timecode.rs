@@ -25,9 +25,7 @@ impl Timecode {
     }
 
     pub fn to_lba(&self) -> usize {
-        self.minute * 60 * 75 +
-        self.second * 75 +
-        self.sector
+        self.minute * 60 * 75 + self.second * 75 + self.sector
     }
 
     pub fn advance(&mut self) {
