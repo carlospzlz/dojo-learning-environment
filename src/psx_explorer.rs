@@ -26,7 +26,7 @@ use psx::System;
 
 fn main() -> () {
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(890.0, 554.0)),
+        initial_window_size: Some(egui::vec2(1000.0, 600.0)),
         //multisampling: 4,
         //renderer: eframe::Renderer::Glow,
         ..Default::default()
@@ -87,9 +87,9 @@ impl eframe::App for MyApp {
             }
 
             let asize = ui.available_size();
-            // 113 width of right panel
-            let new_width = asize[0].round() as u32 - 240;
-            let new_height = asize[1].round() as u32 - 40;
+            // Adjust so other panels don't include it
+            let new_width = asize[0].round() as u32 - 230;
+            let new_height = asize[1].round() as u32 - 30;
 
             // Load texture
             //let img = ColorImage::from_rgb([width, height], &framebuffer);
