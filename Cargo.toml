@@ -28,8 +28,8 @@ name = "hello_psx"
 path = "src/hello_psx.rs"
 
 [[bin]]
-name = "psx_explorer"
-path = "src/psx_explorer.rs"
+name = "psx_gui"
+path = "src/psx_gui.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

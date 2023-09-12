@@ -19,7 +19,7 @@ fn main() -> () {
         ..Default::default()
     };
     eframe::run_native(
-        "RPSX GUI",
+        "PSX GUI",
         options,
         Box::new(|cc| Box::new(MyApp::new(cc))),
     );
@@ -29,6 +29,8 @@ struct MyApp {
     system: System,
     is_running: bool,
     next_frame: bool,
+    reset: bool,
+    hard_reset: bool,
 }
 
 impl MyApp {
@@ -42,6 +44,8 @@ impl MyApp {
             system,
             is_running: true,
             next_frame: false,
+            reset: false,
+            hard_reset: false,
         }
     }
 }
@@ -103,6 +107,12 @@ impl eframe::App for MyApp {
             }
             if ui.button("Next").clicked() {
                 self.next_frame = true;
+            }
+            if ui.button("Reset").clicked() {
+                self.reset = true;
+            }
+            if ui.button("Hard Reset").clicked() {
+                self.hard_reset = true;
             }
             // File Controls
             ui.button("Load");
@@ -173,12 +183,23 @@ impl eframe::App for MyApp {
         });
 
         // Processing
-        if self.is_running {
+        if self.hard_reset {
+            let bios_filepath = "bios/scph1001.bin";
+            let game_filepath = "roms/tekken.bin";
+            self.system = System::new(&bios_filepath, &game_filepath);
+            self.system.reset();
+            self.hard_reset = false;
+        } else if self.reset {
+            self.system.reset();
+            self.reset = false;
+        } else if self.is_running {
             self.system.run_frame();
         } else if self.next_frame {
             self.system.run_frame();
             self.next_frame = false;
         }
+
+        // Reset controller
         self.system.get_controller().button_dpad_up = false;
         self.system.get_controller().button_dpad_down = false;
         self.system.get_controller().button_dpad_left = false;
