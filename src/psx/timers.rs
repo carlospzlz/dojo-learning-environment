@@ -1,3 +1,5 @@
+use log::{debug, error, info, warn};
+
 use std::cmp;
 
 use super::intc::{Intc, Interrupt};
@@ -152,7 +154,7 @@ impl Timers {
                 }
 
                 if (value & 0x300) != 0 {
-                    println!(
+                    debug!(
                         "[TIMER] [INFO] Setting clock source to {} for timer #{}",
                         (value & 0x300) >> 8,
                         index
