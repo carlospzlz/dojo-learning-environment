@@ -2,8 +2,11 @@ use log::{debug, error, info, warn};
 
 use std::cmp;
 
+use serde::{Serialize, Deserialize};
+
 use super::intc::{Intc, Interrupt};
 
+#[derive(Serialize, Deserialize)]
 pub struct Counter {
     value: u32,
     mode: u32,
@@ -90,6 +93,7 @@ impl Counter {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Timers {
     counter: [Counter; 3],
 

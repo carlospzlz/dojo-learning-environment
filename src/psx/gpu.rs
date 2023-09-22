@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::Write;
 
 use byteorder::{ByteOrder, LittleEndian};
+use serde::{Serialize, Deserialize};
 
 use crate::gpu_viewer::{GpuCommand, GpuFrame, GpuPolygon};
 use crate::util;
@@ -25,6 +26,7 @@ pub const CMD_SIZE: [usize; 256] = [
     1, 1,
 ];
 
+#[derive(Serialize, Deserialize)]
 struct Transfer {
     x: u32,
     y: u32,
@@ -53,7 +55,7 @@ impl Transfer {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 enum DmaDirection {
     Off,
     Fifo,
@@ -61,7 +63,7 @@ enum DmaDirection {
     GpureadToCpu,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 enum TexturePageColours {
     TP4Bit,
     TP8Bit,
@@ -69,7 +71,7 @@ enum TexturePageColours {
     Reserved,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 enum SemiTransparency {
     Half,
     Add,
@@ -77,7 +79,7 @@ enum SemiTransparency {
     AddQuarter,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct Texpage {
     flip_y: bool,
     flip_x: bool,
@@ -134,7 +136,7 @@ impl Texpage {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct CacheEntry {
     tag: isize,
     data: [u8; 8],
@@ -149,9 +151,12 @@ impl CacheEntry {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Gpu {
     vram: Box<[u8]>,
+    #[serde(with = "serde_arrays")]
     texture_cache: [CacheEntry; 256],
+    #[serde(with = "serde_arrays")]
     clut_cache: [u16; 256],
     clut_cache_tag: isize,
 

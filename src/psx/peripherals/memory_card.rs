@@ -2,10 +2,14 @@ use std::fs::{File, OpenOptions};
 use std::io::prelude::{Read, Write};
 use std::path::Path;
 
+use serde::{Serialize, Deserialize};
+
 pub const MEMORY_CARD_SIZE: usize = 0x20000;
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemoryCard {
-    file: File,
+    //file: File,
+    filepath: String,
     cache: Box<[u8]>,
     dirty: bool,
 
@@ -23,9 +27,10 @@ pub struct MemoryCard {
 }
 
 impl MemoryCard {
-    pub fn new(filepath: &'static str) -> MemoryCard {
+    pub fn new(filepath: &str) -> MemoryCard {
         let mut card = MemoryCard {
-            file: MemoryCard::get_card_file(filepath),
+            //file: MemoryCard::get_card_file(filepath),
+            filepath: filepath.to_string(),
             cache: vec![0; MEMORY_CARD_SIZE].into_boxed_slice(),
             dirty: false,
 
@@ -50,7 +55,7 @@ impl MemoryCard {
         self.flag = 0x08;
     }
 
-    fn get_card_file(filepath: &'static str) -> File {
+    fn get_card_file(filepath: &str) -> File {
         let path = Path::new(filepath);
 
         if !path.exists() {
@@ -70,13 +75,15 @@ impl MemoryCard {
     }
 
     fn load_cache(&mut self) {
-        self.file.read_exact(&mut self.cache).unwrap();
+        let mut file = MemoryCard::get_card_file(&self.filepath);
+        file.read_exact(&mut self.cache).unwrap();
         self.dirty = false;
     }
 
     fn flush_cache(&mut self) {
-        self.file.write_all(&self.cache).unwrap();
-        self.file.flush().unwrap();
+        let mut file = MemoryCard::get_card_file(&self.filepath);
+        file.write_all(&self.cache).unwrap();
+        file.flush().unwrap();
         self.dirty = false;
     }
 

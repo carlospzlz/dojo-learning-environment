@@ -1,10 +1,12 @@
 use std::cmp;
 
+use serde::{Serialize, Deserialize};
+
 use crate::util::{clip, f32_to_i16, i16_to_f32};
 
 use super::SpuRam;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Reverb {
     counter: usize,
     output: [f32; 2],

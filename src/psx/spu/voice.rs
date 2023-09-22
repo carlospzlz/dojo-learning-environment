@@ -4,6 +4,8 @@ use crate::util::{clip, f32_to_i16, i16_to_f32};
 
 use crate::psx::adpcm::ADPCM_FILTERS;
 
+use serde::{Serialize, Deserialize};
+
 use super::adsr::{Adsr, AdsrState};
 use super::gauss::GAUSS_TABLE;
 use super::volume::Volume;
@@ -12,7 +14,7 @@ use super::SpuRam;
 pub const VOICE_SIZE: usize = 0x10;
 pub const NR_SAMPLES: usize = 28;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Voice {
     counter: usize,
 

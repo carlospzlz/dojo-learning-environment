@@ -1,3 +1,6 @@
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Queue<T> {
     data: Vec<T>,
     capacity: usize,
