@@ -1,6 +1,6 @@
 use super::bus::Bus;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 const DEVICE_COUNT: usize = 5;
 const DEVICE_GRANULARITY: [u64; DEVICE_COUNT] = [7, 8448, 8448, 11, 11];

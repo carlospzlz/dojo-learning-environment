@@ -2,7 +2,7 @@ use log::debug;
 
 use std::cmp;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::intc::{Intc, Interrupt};
 

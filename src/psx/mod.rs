@@ -20,7 +20,7 @@ mod util;
 use std::fs::File;
 use std::io;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use self::bus::Bus;
 use self::cpu::R3000A;

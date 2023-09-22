@@ -2,7 +2,7 @@ use std::fs::{File, OpenOptions};
 use std::io::prelude::{Read, Write};
 use std::path::Path;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub const MEMORY_CARD_SIZE: usize = 0x20000;
 

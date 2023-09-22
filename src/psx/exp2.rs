@@ -1,6 +1,6 @@
 use std::str;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 const DUART_SRA: u32 = 0x1f802021;
 const DUART_THRA: u32 = 0x1f802023;

@@ -1,5 +1,5 @@
 use byteorder::{ByteOrder, LittleEndian};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::cdrom::Cdrom;
 use super::exp2::Exp2;

@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Write;
 
 use byteorder::{ByteOrder, LittleEndian};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::gpu_viewer::{GpuFrame, GpuPolygon};
 use super::intc::{Intc, Interrupt};

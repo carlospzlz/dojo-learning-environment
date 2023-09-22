@@ -6,7 +6,7 @@ mod volume;
 
 use std::collections::VecDeque;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::intc::{Intc, Interrupt};
 use super::util::{clip, f32_to_i16, i16_to_f32};

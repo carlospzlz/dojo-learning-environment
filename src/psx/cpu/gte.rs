@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::cmp;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]

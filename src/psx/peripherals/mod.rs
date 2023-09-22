@@ -4,7 +4,7 @@ mod memory_card;
 use self::controller::Controller;
 use self::memory_card::MemoryCard;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::intc::{Intc, Interrupt};
 use super::queue::Queue;

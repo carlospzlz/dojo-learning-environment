@@ -11,7 +11,7 @@ use self::dmac::Dmac;
 use self::gte::Gte;
 use self::instruction::Instruction;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct ICacheLine {

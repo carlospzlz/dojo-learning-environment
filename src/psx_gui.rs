@@ -1,9 +1,8 @@
-use egui::{Color32, RichText, ColorImage};
+use egui::{Color32, ColorImage, RichText};
+use image::{Rgb, RgbImage};
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
-use image::{RgbImage, Rgb};
-
 
 // Emu system
 mod psx;
@@ -16,11 +15,7 @@ fn main() -> Result<(), eframe::Error> {
         initial_window_size: Some(egui::vec2(1000.0, 600.0)),
         ..Default::default()
     };
-    eframe::run_native(
-        "PSX GUI",
-        options,
-        Box::new(|cc| Box::new(MyApp::new(cc))),
-    )
+    eframe::run_native("PSX GUI", options, Box::new(|cc| Box::new(MyApp::new(cc))))
 }
 
 struct MyApp {
@@ -54,7 +49,6 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         egui::CentralPanel::default().show(ctx, |ui| {
             // Get frame buffer
             let (width, height) = self.system.get_display_size();
@@ -79,13 +73,14 @@ impl eframe::App for MyApp {
 
             // Load texture
             //let img = ColorImage::from_rgb([width, height], &framebuffer);
-            let img = image::imageops::resize(&img, new_width, new_height, image::imageops::FilterType::Lanczos3);
-            let img = ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
-            let texture = ctx.load_texture(
-                    "psx_screen",
-                    img,
-                    Default::default()
+            let img = image::imageops::resize(
+                &img,
+                new_width,
+                new_height,
+                image::imageops::FilterType::Lanczos3,
             );
+            let img = ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
+            let texture = ctx.load_texture("psx_screen", img, Default::default());
 
             // Show frame
             ui.horizontal(|ui| {
@@ -161,8 +156,7 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_square = true;
                 }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 102, 102));
-                if ui.button("○").clicked()
-                {
+                if ui.button("○").clicked() {
                     self.system.get_controller().button_circle = true;
                 }
             });

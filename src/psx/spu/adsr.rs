@@ -1,6 +1,6 @@
 use std::cmp;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::super::util::clip;
 

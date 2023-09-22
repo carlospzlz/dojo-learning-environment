@@ -7,12 +7,12 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use timecode::Timecode;
 
-use crate::psx::adpcm::{ADPCM_FILTERS, ADPCM_ZIGZAG_TABLE};
 use super::queue::Queue;
+use crate::psx::adpcm::{ADPCM_FILTERS, ADPCM_ZIGZAG_TABLE};
 
 use super::intc::{Intc, Interrupt};
 use super::spu::Spu;

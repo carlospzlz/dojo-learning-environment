@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::util;
 
@@ -20,24 +20,24 @@ const MDEC_ZAGZIG: [usize; 64] = [
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct QuantTableItemType {
     #[serde(with = "serde_arrays")]
-    data: [u8; 64]
+    data: [u8; 64],
 }
 
 impl Default for QuantTableItemType {
     fn default() -> Self {
-        QuantTableItemType{ data: [0; 64] }
+        QuantTableItemType { data: [0; 64] }
     }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize)]
 struct BlocksItemType {
     #[serde(with = "serde_arrays")]
-    data: [i16; 64]
+    data: [i16; 64],
 }
 
 impl Default for BlocksItemType {
     fn default() -> Self {
-        BlocksItemType{ data: [0; 64] }
+        BlocksItemType { data: [0; 64] }
     }
 }
 
@@ -178,8 +178,8 @@ impl Mdec {
                     let mut sum = 0;
 
                     for z in 0..8 {
-                        sum +=
-                            (src.data[y + z * 8] as i32) * ((self.scale_table[x + z * 8] as i32) >> 3);
+                        sum += (src.data[y + z * 8] as i32)
+                            * ((self.scale_table[x + z * 8] as i32) >> 3);
                     }
 
                     dst[x + y * 8] = ((sum + 0xfff) >> 13) as i16;

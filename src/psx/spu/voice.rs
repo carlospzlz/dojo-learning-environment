@@ -1,14 +1,13 @@
 use std::cmp;
 
-
 use crate::psx::adpcm::ADPCM_FILTERS;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-use super::SpuRam;
 use super::adsr::{Adsr, AdsrState};
 use super::gauss::GAUSS_TABLE;
 use super::volume::Volume;
+use super::SpuRam;
 
 use super::super::util::{clip, f32_to_i16, i16_to_f32};
 
