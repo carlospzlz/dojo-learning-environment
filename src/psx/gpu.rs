@@ -5,12 +5,13 @@ use std::io::Write;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::{Serialize, Deserialize};
 
-use super::gpu_viewer::{GpuCommand, GpuFrame, GpuPolygon};
+use super::gpu_viewer::{GpuFrame, GpuPolygon};
 use super::intc::{Intc, Interrupt};
 use super::rasteriser::{Colour, Vector2i, Vector3i};
 use super::timers::Timers;
 use super::util;
 
+#[allow(dead_code)]
 pub const DITHER_TABLE: [i32; 16] = [-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2];
 
 pub const CMD_SIZE: [usize; 256] = [
@@ -573,7 +574,7 @@ impl Gpu {
         value |= (self.colour_depth as u32) << 21;
         value |= (self.video_mode as u32) << 20;
         value |= match self.vres {
-            480 => (1 << 19),
+            480 => 1 << 19,
             240 => 0,
             _ => unreachable!(),
         };
@@ -626,14 +627,14 @@ impl Gpu {
             self.polyline_remaining -= 1;
 
             if self.polyline_remaining == 0 {
-                let mut coords = [self.polyline_coord; 2];
+                let coords = [self.polyline_coord; 2];
                 let mut colours = [self.polyline_colour; 2];
 
                 if self.shaded {
                     colours[1] = Colour::from_u32(self.command_buffer[0]);
                 }
 
-                let coord2 = self.command_buffer[1];
+                let _coord2 = self.command_buffer[1];
                 //coords[1] = self.get_coord(coord2);
 
                 //self.rasterise_line(coords, colours);
@@ -1195,7 +1196,7 @@ impl Gpu {
 
         let shaded = (command & 0x10) != 0;
         let polyline = (command & 0x8) != 0;
-        let transparency = (command & 0x2) != 0;
+        let _transparency = (command & 0x2) != 0;
 
         self.polyline = polyline;
         self.polyline_remaining = match shaded {

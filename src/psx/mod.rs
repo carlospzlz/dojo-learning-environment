@@ -69,6 +69,7 @@ impl System {
         self.bus.peripherals().sync();
     }
 
+    #[allow(dead_code)]
     pub fn load_psexe(&mut self, filename: String) -> io::Result<()> {
         let mut file = File::open(filename)?;
 
@@ -98,6 +99,7 @@ impl System {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_audio_samples(&mut self) -> Vec<i16> {
         self.bus.spu().drain_samples()
     }
@@ -106,10 +108,12 @@ impl System {
         self.bus.peripherals().controller()
     }
 
+    #[allow(dead_code)]
     pub fn get_24bit(&self) -> bool {
         self.bus.gpu().get_24bit()
     }
 
+    #[allow(dead_code)]
     pub fn get_display_origin(&self) -> (u32, u32) {
         self.bus.gpu().get_display_origin()
     }
@@ -122,10 +126,12 @@ impl System {
         self.bus.gpu().get_framebuffer(data, draw_full_vram)
     }
 
+    #[allow(dead_code)]
     pub fn get_frame_data(&mut self) -> &mut GpuFrame {
         self.bus.gpu_mut().get_frame_data()
     }
 
+    #[allow(dead_code)]
     pub fn dump_vram(&self) {
         self.bus.gpu().dump_vram();
     }

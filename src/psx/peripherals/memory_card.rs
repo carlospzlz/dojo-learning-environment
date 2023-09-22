@@ -87,10 +87,12 @@ impl MemoryCard {
         self.dirty = false;
     }
 
+    #[allow(dead_code)]
     fn read_cache(&self, index: usize) -> u8 {
         self.cache[index]
     }
 
+    #[allow(dead_code)]
     fn write_cache(&mut self, index: usize, value: u8) {
         self.cache[index] = value;
         self.dirty = true;
@@ -102,6 +104,7 @@ impl MemoryCard {
         }
     }
 
+    #[allow(dead_code)]
     pub fn response(&mut self, command: u8) -> u8 {
         self.ack = true;
         let mut reply = 0xff;
@@ -321,10 +324,12 @@ impl MemoryCard {
         reply
     }
 
+    #[allow(dead_code)]
     pub fn ack(&self) -> bool {
         self.ack
     }
 
+    #[allow(dead_code)]
     pub fn enable(&self) -> bool {
         self.state != 0
     }

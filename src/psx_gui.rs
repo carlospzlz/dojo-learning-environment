@@ -1,6 +1,4 @@
 use egui::{Color32, RichText, ColorImage};
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
@@ -12,7 +10,7 @@ mod psx;
 
 use psx::System;
 
-fn main() -> () {
+fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`)
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(1000.0, 600.0)),
@@ -22,7 +20,7 @@ fn main() -> () {
         "PSX GUI",
         options,
         Box::new(|cc| Box::new(MyApp::new(cc))),
-    );
+    )
 }
 
 struct MyApp {
@@ -36,7 +34,7 @@ struct MyApp {
 }
 
 impl MyApp {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let bios_filepath = "bios/scph1001.bin";
         let game_filepath = "roms/tekken.bin";
         let mut system = System::new(&bios_filepath, &game_filepath);
@@ -139,7 +137,7 @@ impl eframe::App for MyApp {
                     ui.label(RichText::new("⏺").color(Color32::GRAY));
                 }
             });
-            ui.horizontal(|ui| {});
+            ui.horizontal(|_ui| {});
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
                 if ui.button("⏶").clicked() {
@@ -179,7 +177,7 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_cross = true;
                 }
             });
-            ui.horizontal(|ui| {});
+            ui.horizontal(|_ui| {});
             ui.horizontal(|ui| {
                 if ui.button("SELECT").clicked() {
                     self.system.get_controller().button_select = true;
@@ -195,13 +193,15 @@ impl eframe::App for MyApp {
         if self.load_state {
             let mut bytes = Vec::new();
             let mut file = File::open("state.bin").unwrap();
-            file.read_to_end(&mut bytes);
+            // TODO: error handling
+            let _ = file.read_to_end(&mut bytes).unwrap();
             self.system = bincode::deserialize(&bytes).unwrap();
             self.load_state = false;
         } else if self.save_state {
             let bytes = bincode::serialize(&self.system).unwrap();
             let mut file = File::create("state.bin").unwrap();
-            file.write_all(&bytes);
+            // TODO: error handling
+            let _ = file.write_all(&bytes).unwrap();
             self.save_state = false;
         } else if self.hard_reset {
             let bios_filepath = "bios/scph1001.bin";

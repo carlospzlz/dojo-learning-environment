@@ -81,10 +81,12 @@ impl Bus {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_address(&self) -> u64 {
         self as *const _ as u64
     }
 
+    #[allow(dead_code)]
     pub fn get_recompiler_store_word() -> u64 {
         Self::recompiler_store_word as *const () as u64
     }
@@ -265,6 +267,7 @@ impl Bus {
         (value, error)
     }
 
+    #[allow(dead_code)]
     pub fn load_instruction(&mut self, address: u32) -> u32 {
         if (address & 0x3) != 0 {
             panic!("[RECOMPILER] [ERROR] Unaligned address: 0x{:08x}", address);
@@ -392,5 +395,6 @@ impl Bus {
         error
     }
 
-    pub fn recompiler_store_word(&mut self, address: u32, value: u32) {}
+    #[allow(dead_code)]
+    pub fn recompiler_store_word(&mut self, _address: u32, _value: u32) {}
 }

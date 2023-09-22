@@ -16,10 +16,12 @@ impl GpuVertex {
         }
     }
 
+    #[allow(dead_code)]
     pub fn position(&self) -> (f32, f32) {
         (self.position.0 as f32, self.position.1 as f32)
     }
 
+    #[allow(dead_code)]
     pub fn texcoord(&self, texpage: u16) -> (f32, f32) {
         let tpx = (texpage & 0xf) << 6;
         let tpy = (texpage & 0x10) << 4;
@@ -38,6 +40,7 @@ impl GpuVertex {
         ((tpx + u) as f32, (tpy + v) as f32)
     }
 
+    #[allow(dead_code)]
     pub fn colour(&self) -> [f32; 3] {
         let r = (self.colour.0 as f32) / 255.0;
         let g = (self.colour.1 as f32) / 255.0;
@@ -80,6 +83,7 @@ pub enum GpuCommand {
 }
 
 impl GpuCommand {
+    #[allow(dead_code)]
     pub fn name(command: &GpuCommand) -> &'static str {
         match command {
             GpuCommand::Polygon(p) => match (p.shaded, p.textured, p.quad) {
@@ -108,10 +112,12 @@ impl GpuFrame {
         }
     }
 
+    #[allow(dead_code)]
     pub fn add(&mut self, command: GpuCommand) {
         self.commands.push(command);
     }
 
+    #[allow(dead_code)]
     pub fn take(&mut self, frame: &mut GpuFrame) {
         self.commands = frame.commands.drain(..).collect();
     }

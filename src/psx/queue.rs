@@ -13,6 +13,7 @@ impl<T> Queue<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -37,6 +38,7 @@ impl<T> Queue<T> {
         self.data.clear();
     }
 
+    #[allow(dead_code)]
     pub fn data(&mut self) -> &mut Vec<T> {
         &mut self.data
     }
@@ -60,6 +62,7 @@ impl Queue<u8> {
 }
 
 impl Queue<u16> {
+    #[allow(dead_code)]
     pub fn new(capacity: usize) -> Queue<u16> {
         Queue {
             data: Vec::with_capacity(capacity),
@@ -67,6 +70,7 @@ impl Queue<u16> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn pop(&mut self) -> u16 {
         if self.has_data() {
             return self.data.remove(0);
@@ -77,6 +81,7 @@ impl Queue<u16> {
 }
 
 impl Queue<u32> {
+    #[allow(dead_code)]
     pub fn new(capacity: usize) -> Queue<u32> {
         Queue {
             data: Vec::with_capacity(capacity),
@@ -84,6 +89,7 @@ impl Queue<u32> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn pop(&mut self) -> u32 {
         if self.has_data() {
             return self.data.remove(0);

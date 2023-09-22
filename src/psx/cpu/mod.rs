@@ -104,10 +104,12 @@ impl R3000A {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_address(&self) -> u64 {
         self as *const _ as u64
     }
 
+    #[allow(dead_code)]
     pub fn get_regs_offset(&self) -> u32 {
         let base = self.get_address();
         let reg = &self.regs as *const _ as u64;
@@ -115,6 +117,7 @@ impl R3000A {
         (reg - base) as u32
     }
 
+    #[allow(dead_code)]
     pub fn get_pc_offset(&self) -> u32 {
         let base = self.get_address();
         let pc = &self.pc as *const _ as u64;

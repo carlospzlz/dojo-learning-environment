@@ -45,6 +45,7 @@ impl Colour {
         pixel
     }
 
+    #[allow(dead_code)]
     pub fn to_u32(self) -> u32 {
         let mut pixel = 0;
 
@@ -55,6 +56,7 @@ impl Colour {
         pixel
     }
 
+    #[allow(dead_code)]
     pub fn to_f32(self) -> [f32; 3] {
         let r = (self.r as f32) / 255.0;
         let g = (self.g as f32) / 255.0;

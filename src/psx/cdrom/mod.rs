@@ -619,7 +619,8 @@ impl Cdrom {
                 game_file.seek(SeekFrom::Start(cursor)).unwrap();
 
                 let mut data = [0u8; 0x930];
-                game_file.read_exact(&mut data);
+                // TODO: Error handling?
+                let _ = game_file.read_exact(&mut data).unwrap();
 
                 for i in 0..0x24c {
                     let left = (data[i * 4] as u16) | ((data[i * 4 + 1] as u16) << 8);

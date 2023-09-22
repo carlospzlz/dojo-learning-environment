@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 pub enum EventType {
     Vblank,
     Cdrom,
@@ -7,6 +8,7 @@ pub enum EventType {
     Spu,
 }
 
+#[allow(dead_code)]
 struct Event {
     event_type: EventType,
     timestamp: i64,
@@ -17,6 +19,7 @@ pub struct Scheduler {
     timestamp: i64,
 }
 
+#[allow(dead_code)]
 impl Scheduler {
     pub fn new() -> Self {
         Self {
