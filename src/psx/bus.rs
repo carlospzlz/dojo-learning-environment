@@ -1,8 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 use serde::{Serialize, Deserialize};
 
-use crate::util;
-
 use super::cdrom::Cdrom;
 use super::exp2::Exp2;
 use super::gpu::Gpu;
@@ -12,6 +10,7 @@ use super::peripherals::Peripherals;
 use super::spu::Spu;
 use super::timekeeper::{Device, Timekeeper};
 use super::timers::Timers;
+use super::util;
 
 #[derive(PartialEq)]
 pub enum BusWidth {

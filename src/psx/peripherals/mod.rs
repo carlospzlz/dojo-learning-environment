@@ -7,8 +7,7 @@ use self::memory_card::MemoryCard;
 use serde::{Serialize, Deserialize};
 
 use super::intc::{Intc, Interrupt};
-
-use crate::queue::Queue;
+use super::queue::Queue;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct PeripheralsMode {

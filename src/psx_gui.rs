@@ -8,10 +8,7 @@ use image::{RgbImage, Rgb};
 
 
 // Emu system
-mod gpu_viewer;
 mod psx;
-mod queue;
-mod util;
 
 use psx::System;
 

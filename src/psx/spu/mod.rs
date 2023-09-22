@@ -8,9 +8,8 @@ use std::collections::VecDeque;
 
 use serde::{Serialize, Deserialize};
 
-use crate::util::{clip, f32_to_i16, i16_to_f32};
-
 use super::intc::{Intc, Interrupt};
+use super::util::{clip, f32_to_i16, i16_to_f32};
 
 use self::reverb::Reverb;
 use self::voice::Voice;

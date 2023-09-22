@@ -3,7 +3,7 @@ use std::mem;
 
 use serde::{Serialize, Deserialize};
 
-use crate::util;
+use super::util;
 
 const MDEC_BLK_CR: usize = 0;
 const MDEC_BLK_CB: usize = 1;

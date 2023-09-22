@@ -12,11 +12,11 @@ use serde::{Serialize, Deserialize};
 use timecode::Timecode;
 
 use crate::psx::adpcm::{ADPCM_FILTERS, ADPCM_ZIGZAG_TABLE};
-use crate::queue::Queue;
-use crate::util::{bcd_to_u8, clip, u8_to_bcd};
+use super::queue::Queue;
 
 use super::intc::{Intc, Interrupt};
 use super::spu::Spu;
+use super::util::{bcd_to_u8, clip, u8_to_bcd};
 
 pub const SECTORS_PER_SECOND: u64 = 75;
 pub const SECTORS_PER_MINUTE: u64 = 60 * SECTORS_PER_SECOND;

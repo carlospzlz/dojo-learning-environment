@@ -1,15 +1,16 @@
 use std::cmp;
 
-use crate::util::{clip, f32_to_i16, i16_to_f32};
 
 use crate::psx::adpcm::ADPCM_FILTERS;
 
 use serde::{Serialize, Deserialize};
 
+use super::SpuRam;
 use super::adsr::{Adsr, AdsrState};
 use super::gauss::GAUSS_TABLE;
 use super::volume::Volume;
-use super::SpuRam;
+
+use super::super::util::{clip, f32_to_i16, i16_to_f32};
 
 pub const VOICE_SIZE: usize = 0x10;
 pub const NR_SAMPLES: usize = 28;

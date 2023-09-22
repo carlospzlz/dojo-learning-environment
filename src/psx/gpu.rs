@@ -5,12 +5,11 @@ use std::io::Write;
 use byteorder::{ByteOrder, LittleEndian};
 use serde::{Serialize, Deserialize};
 
-use crate::gpu_viewer::{GpuCommand, GpuFrame, GpuPolygon};
-use crate::util;
-
+use super::gpu_viewer::{GpuCommand, GpuFrame, GpuPolygon};
 use super::intc::{Intc, Interrupt};
 use super::rasteriser::{Colour, Vector2i, Vector3i};
 use super::timers::Timers;
+use super::util;
 
 pub const DITHER_TABLE: [i32; 16] = [-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2];
 

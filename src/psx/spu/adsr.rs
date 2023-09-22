@@ -2,7 +2,7 @@ use std::cmp;
 
 use serde::{Serialize, Deserialize};
 
-use crate::util::clip;
+use super::super::util::clip;
 
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum AdsrState {

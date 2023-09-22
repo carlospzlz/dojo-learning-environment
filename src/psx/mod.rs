@@ -1,28 +1,30 @@
-mod adpcm;
 pub mod bus;
-mod cdrom;
 pub mod cpu;
+pub mod rasteriser;
+
+mod adpcm;
+mod cdrom;
 mod exp2;
 mod gpu;
+mod gpu_viewer;
 mod intc;
 mod mdec;
 mod peripherals;
-pub mod rasteriser;
+mod queue;
 mod scheduler;
 mod spu;
 mod timekeeper;
 mod timers;
+mod util;
 
 use std::fs::File;
 use std::io;
-
-use crate::gpu_viewer::GpuFrame;
-use crate::util;
 
 use serde::{Serialize, Deserialize};
 
 use self::bus::Bus;
 use self::cpu::R3000A;
+use self::gpu_viewer::GpuFrame;
 use self::peripherals::controller::Controller;
 use self::timekeeper::Timekeeper;
 
