@@ -11,7 +11,9 @@ use self::dmac::Dmac;
 use self::gte::Gte;
 use self::instruction::Instruction;
 
-#[derive(Clone, Copy)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct ICacheLine {
     valid: usize,
     tag: u32,
@@ -28,7 +30,9 @@ impl ICacheLine {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 struct ICache {
+    #[serde(with = "serde_arrays")]
     lines: [ICacheLine; 256],
 }
 
@@ -40,6 +44,7 @@ impl ICache {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct R3000A {
     pub pc: u32,
     pub new_pc: u32,

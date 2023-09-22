@@ -19,11 +19,14 @@ use std::io;
 use crate::gpu_viewer::GpuFrame;
 use crate::util;
 
+use serde::{Serialize, Deserialize};
+
 use self::bus::Bus;
 use self::cpu::R3000A;
 use self::peripherals::controller::Controller;
 use self::timekeeper::Timekeeper;
 
+#[derive(Serialize, Deserialize)]
 pub struct System {
     pub running: bool,
 

@@ -1,6 +1,9 @@
 use egui::{Color32, RichText, ColorImage};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::fs::File;
+use std::io::Read;
+use std::io::Write;
 use image::{RgbImage, Rgb};
 
 
@@ -31,6 +34,8 @@ struct MyApp {
     next_frame: bool,
     reset: bool,
     hard_reset: bool,
+    load_state: bool,
+    save_state: bool,
 }
 
 impl MyApp {
@@ -46,6 +51,8 @@ impl MyApp {
             next_frame: false,
             reset: false,
             hard_reset: false,
+            load_state: false,
+            save_state: false,
         }
     }
 }
@@ -115,8 +122,12 @@ impl eframe::App for MyApp {
                 self.hard_reset = true;
             }
             // File Controls
-            ui.button("Load");
-            ui.button("Save");
+            if ui.button("Load").clicked() {
+                self.load_state = true;
+            }
+            if ui.button("Save").clicked() {
+                self.save_state = true;
+            }
         });
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -183,7 +194,19 @@ impl eframe::App for MyApp {
         });
 
         // Processing
-        if self.hard_reset {
+        // TODO: pattern matching
+        if self.load_state {
+            let mut bytes = Vec::new();
+            let mut file = File::open("state.bin").unwrap();
+            file.read_to_end(&mut bytes);
+            self.system = bincode::deserialize(&bytes).unwrap();
+            self.load_state = false;
+        } else if self.save_state {
+            let bytes = bincode::serialize(&self.system).unwrap();
+            let mut file = File::create("state.bin").unwrap();
+            file.write_all(&bytes);
+            self.save_state = false;
+        } else if self.hard_reset {
             let bios_filepath = "bios/scph1001.bin";
             let game_filepath = "roms/tekken.bin";
             self.system = System::new(&bios_filepath, &game_filepath);

@@ -1,4 +1,5 @@
 use byteorder::{ByteOrder, LittleEndian};
+use serde::{Serialize, Deserialize};
 
 use crate::util;
 
@@ -19,6 +20,7 @@ pub enum BusWidth {
     WORD,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Bus {
     bios: Box<[u8]>,
     ram: Box<[u8]>,

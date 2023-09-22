@@ -1,6 +1,7 @@
+use serde::{Serialize, Deserialize};
 use std::cmp;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct GteMatrix {
     m11: i16,
     m12: i16,
@@ -29,7 +30,7 @@ impl GteMatrix {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct GteVector2 {
     x: i16,
     y: i16,
@@ -41,7 +42,7 @@ impl GteVector2 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct GteVector3 {
     x: i16,
     y: i16,
@@ -54,7 +55,7 @@ impl GteVector3 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct GteVector3_32 {
     x: i32,
     y: i32,
@@ -67,7 +68,7 @@ impl GteVector3_32 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 struct GteRgb {
     r: u8,
     g: u8,
@@ -106,6 +107,7 @@ const UNR_TABLE: [u8; 0x101] = [
     0x00,
 ];
 
+#[derive(Serialize, Deserialize)]
 pub struct Gte {
     sf: usize,
     mx: usize,

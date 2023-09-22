@@ -3,10 +3,14 @@ mod memory_card;
 
 use self::controller::Controller;
 use self::memory_card::MemoryCard;
+
+use serde::{Serialize, Deserialize};
+
 use super::intc::{Intc, Interrupt};
 
 use crate::queue::Queue;
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct PeripheralsMode {
     clk_output_polarity: bool,
     parity_type: bool,
@@ -38,6 +42,7 @@ impl PeripheralsMode {
     }
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct PeripheralsControl {
     slot: bool,
     ack_interrupt_enable: bool,
@@ -96,13 +101,14 @@ impl PeripheralsControl {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 enum PeripheralsSelect {
     None,
     Controller,
     MemoryCard,
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Peripherals {
     controller: Controller,
     mem_card1: MemoryCard,

@@ -1,6 +1,8 @@
 use crate::util::i16_to_f32;
 
-#[derive(Clone, Copy, Default)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, Copy, Default, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Volume {
     pub left: i16,
     pub right: i16,
