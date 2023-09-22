@@ -1,8 +1,10 @@
 use egui::{Color32, ColorImage, RichText};
+use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
+use std::path::PathBuf;
 
 // Emu system
 mod psx;
@@ -26,6 +28,10 @@ struct MyApp {
     hard_reset: bool,
     load_state: bool,
     save_state: bool,
+    opened_file: Option<PathBuf>,
+    open_file_dialog: Option<FileDialog>,
+    saved_file: Option<PathBuf>,
+    save_file_dialog: Option<FileDialog>,
 }
 
 impl MyApp {
@@ -43,6 +49,10 @@ impl MyApp {
             hard_reset: false,
             load_state: false,
             save_state: false,
+            opened_file: None,
+            open_file_dialog: None,
+            saved_file: None,
+            save_file_dialog: None,
         }
     }
 }
@@ -87,8 +97,6 @@ impl eframe::App for MyApp {
                 ui.add_space(113.0);
                 ui.image(&texture, texture.size_vec2());
             });
-
-            ctx.request_repaint();
         });
 
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
@@ -113,12 +121,19 @@ impl eframe::App for MyApp {
             }
             // File Controls
             if ui.button("Load").clicked() {
-                self.load_state = true;
+                let dialog = FileDialog::open_file(self.opened_file.clone());
+                let mut dialog = dialog.title("Load State");
+                dialog.open();
+                self.open_file_dialog = Some(dialog);
             }
             if ui.button("Save").clicked() {
-                self.save_state = true;
+                let dialog = FileDialog::save_file(self.saved_file.clone());
+                let mut dialog = dialog.title("Save State");
+                dialog.open();
+                self.save_file_dialog = Some(dialog);
             }
         });
+
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 //if self.system.is_on() {
@@ -182,6 +197,33 @@ impl eframe::App for MyApp {
             });
         });
 
+        // File dialogs
+        if let Some(dialog) = &mut self.open_file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    let filepath = file.to_str().unwrap();
+                    println!("Loading {} ...", filepath);
+                    let mut bytes = Vec::new();
+                    let mut file = File::open(&filepath).unwrap();
+                    // TODO: error handling
+                    let _ = file.read_to_end(&mut bytes).unwrap();
+                    self.system = bincode::deserialize(&bytes).unwrap();
+                }
+            }
+        }
+        if let Some(dialog) = &mut self.save_file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    let filepath = file.to_str().unwrap();
+                    println!("Saving {} ...", filepath);
+                    let bytes = bincode::serialize(&self.system).unwrap();
+                    let mut file = File::create(&filepath).unwrap();
+                    // TODO: error handling
+                    let _ = file.write_all(&bytes).unwrap();
+                }
+            }
+        }
+
         // Processing
         // TODO: pattern matching
         if self.load_state {
@@ -224,5 +266,8 @@ impl eframe::App for MyApp {
         self.system.get_controller().button_cross = false;
         self.system.get_controller().button_start = false;
         self.system.get_controller().button_select = false;
+
+        // Use update as main loop for now
+        ctx.request_repaint();
     }
 }
