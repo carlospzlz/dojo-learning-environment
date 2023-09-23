@@ -1,4 +1,4 @@
-use egui::{Color32, ColorImage, RichText};
+use egui::{Color32, ColorImage, RichText, Vec2};
 use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
 use std::fs::File;
@@ -23,11 +23,6 @@ fn main() -> Result<(), eframe::Error> {
 struct MyApp {
     system: System,
     is_running: bool,
-    next_frame: bool,
-    reset: bool,
-    hard_reset: bool,
-    load_state: bool,
-    save_state: bool,
     opened_file: Option<PathBuf>,
     open_file_dialog: Option<FileDialog>,
     saved_file: Option<PathBuf>,
@@ -44,11 +39,6 @@ impl MyApp {
         Self {
             system,
             is_running: true,
-            next_frame: false,
-            reset: false,
-            hard_reset: false,
-            load_state: false,
-            save_state: false,
             opened_file: None,
             open_file_dialog: None,
             saved_file: None,
@@ -111,24 +101,35 @@ impl eframe::App for MyApp {
                     self.is_running = false;
                 }
                 if ui.button("Next").clicked() {
-                    self.next_frame = true;
+                    if !self.is_running {
+                        self.system.run_frame();
+                    }
                 }
                 if ui.button("Reset").clicked() {
-                    self.reset = true;
+                    self.system.reset();
                 }
                 if ui.button("Hard Reset").clicked() {
-                    self.hard_reset = true;
+                    let bios_filepath = "bios/scph1001.bin";
+                    let game_filepath = "roms/tekken.bin";
+                    self.system = System::new(&bios_filepath, &game_filepath);
+                    self.system.reset();
                 }
                 // File Controls
                 if ui.button("Load").clicked() {
+                    // If user is about to load, probably stop emu
+                    self.is_running = false;
                     let dialog = FileDialog::open_file(self.opened_file.clone());
-                    let mut dialog = dialog.title("Load State");
+                    let dialog = dialog.title("Load State");
+                    let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
                     dialog.open();
                     self.open_file_dialog = Some(dialog);
                 }
                 if ui.button("Save").clicked() {
+                    // Stop emu, to save the current state
+                    self.is_running = false;
                     let dialog = FileDialog::save_file(self.saved_file.clone());
-                    let mut dialog = dialog.title("Save State");
+                    let dialog = dialog.title("Save State");
+                    let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
                     dialog.open();
                     self.save_file_dialog = Some(dialog);
                 }
@@ -184,7 +185,6 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_cross = true;
                 }
             });
-            //ui.horizontal(|_ui| {});
             ui.horizontal(|ui| {
                 ui.add_space(available_width / 2.0 - controller_half_size);
                 if ui.button("SELECT").clicked() {
@@ -194,7 +194,6 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_start = true;
                 }
             });
-
         });
         // File dialogs
         if let Some(dialog) = &mut self.open_file_dialog {
@@ -207,6 +206,7 @@ impl eframe::App for MyApp {
                     // TODO: error handling
                     let _ = file.read_to_end(&mut bytes).unwrap();
                     self.system = bincode::deserialize(&bytes).unwrap();
+                    self.is_running = true;
                 }
             }
         }
@@ -219,39 +219,15 @@ impl eframe::App for MyApp {
                     let mut file = File::create(&filepath).unwrap();
                     // TODO: error handling
                     let _ = file.write_all(&bytes).unwrap();
+                    self.is_running = true;
                 }
             }
         }
 
         // Processing
-        // TODO: pattern matching
-        if self.load_state {
-            let mut bytes = Vec::new();
-            let mut file = File::open("state.bin").unwrap();
-            // TODO: error handling
-            let _ = file.read_to_end(&mut bytes).unwrap();
-            self.system = bincode::deserialize(&bytes).unwrap();
-            self.load_state = false;
-        } else if self.save_state {
-            let bytes = bincode::serialize(&self.system).unwrap();
-            let mut file = File::create("state.bin").unwrap();
-            // TODO: error handling
-            let _ = file.write_all(&bytes).unwrap();
-            self.save_state = false;
-        } else if self.hard_reset {
-            let bios_filepath = "bios/scph1001.bin";
-            let game_filepath = "roms/tekken.bin";
-            self.system = System::new(&bios_filepath, &game_filepath);
-            self.system.reset();
-            self.hard_reset = false;
-        } else if self.reset {
-            self.system.reset();
-            self.reset = false;
-        } else if self.is_running {
+        if self.is_running {
             self.system.run_frame();
-        } else if self.next_frame {
-            self.system.run_frame();
-            self.next_frame = false;
+            ctx.request_repaint();
         }
 
         // Reset controller
@@ -265,8 +241,5 @@ impl eframe::App for MyApp {
         self.system.get_controller().button_cross = false;
         self.system.get_controller().button_start = false;
         self.system.get_controller().button_select = false;
-
-        // Use update as main loop for now
-        ctx.request_repaint();
     }
 }
