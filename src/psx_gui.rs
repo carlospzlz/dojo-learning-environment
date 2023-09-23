@@ -14,7 +14,7 @@ use psx::System;
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`)
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(1000.0, 600.0)),
+        initial_window_size: Some(egui::vec2(480.0, 460.0)),
         ..Default::default()
     };
     eframe::run_native("PSX GUI", options, Box::new(|cc| Box::new(MyApp::new(cc))))
@@ -77,9 +77,10 @@ impl eframe::App for MyApp {
             }
 
             let asize = ui.available_size();
-            // Adjust so other panels don't include it
-            let new_width = asize[0].round() as u32 - 230;
-            let new_height = asize[1].round() as u32 - 30;
+            // Adjust so other panels don't occlude it
+            let bottom_panel_height = 110;
+            let new_width = asize[0].round() as u32;
+            let new_height = asize[1].round() as u32 - bottom_panel_height;
 
             // Load texture
             //let img = ColorImage::from_rgb([width, height], &framebuffer);
@@ -94,62 +95,58 @@ impl eframe::App for MyApp {
 
             // Show frame
             ui.horizontal(|ui| {
-                ui.add_space(113.0);
                 ui.image(&texture, texture.size_vec2());
             });
         });
 
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
-            ui.label("Debug info");
-        });
-
-        egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
-            if ui.button("Start").clicked() {
-                self.is_running = true;
-            }
-            if ui.button("Stop").clicked() {
-                self.is_running = false;
-            }
-            if ui.button("Next").clicked() {
-                self.next_frame = true;
-            }
-            if ui.button("Reset").clicked() {
-                self.reset = true;
-            }
-            if ui.button("Hard Reset").clicked() {
-                self.hard_reset = true;
-            }
-            // File Controls
-            if ui.button("Load").clicked() {
-                let dialog = FileDialog::open_file(self.opened_file.clone());
-                let mut dialog = dialog.title("Load State");
-                dialog.open();
-                self.open_file_dialog = Some(dialog);
-            }
-            if ui.button("Save").clicked() {
-                let dialog = FileDialog::save_file(self.saved_file.clone());
-                let mut dialog = dialog.title("Save State");
-                dialog.open();
-                self.save_file_dialog = Some(dialog);
-            }
-        });
-
-        egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
+            let asize = ui.available_size();
+            let available_width = asize[0];
             ui.horizontal(|ui| {
-                //if self.system.is_on() {
-                //    ui.label(RichText::new("⚡").color(Color32::YELLOW));
-                //} else {
-                //    ui.label(RichText::new("⚡").color(Color32::GRAY));
-                //}
+                // Emulator Controls
+                if ui.button("Start").clicked() {
+                    self.is_running = true;
+                }
+                if ui.button("Stop").clicked() {
+                    self.is_running = false;
+                }
+                if ui.button("Next").clicked() {
+                    self.next_frame = true;
+                }
+                if ui.button("Reset").clicked() {
+                    self.reset = true;
+                }
+                if ui.button("Hard Reset").clicked() {
+                    self.hard_reset = true;
+                }
+                // File Controls
+                if ui.button("Load").clicked() {
+                    let dialog = FileDialog::open_file(self.opened_file.clone());
+                    let mut dialog = dialog.title("Load State");
+                    dialog.open();
+                    self.open_file_dialog = Some(dialog);
+                }
+                if ui.button("Save").clicked() {
+                    let dialog = FileDialog::save_file(self.saved_file.clone());
+                    let mut dialog = dialog.title("Save State");
+                    dialog.open();
+                    self.save_file_dialog = Some(dialog);
+                }
+                let emu_controls_width = 350.0;
+                let space = available_width - emu_controls_width;
+                let space = space.max(0.0);
+                ui.add_space(space);
                 if self.is_running {
                     ui.label(RichText::new("⏺").color(Color32::LIGHT_GREEN));
                 } else {
                     ui.label(RichText::new("⏺").color(Color32::GRAY));
                 }
             });
-            ui.horizontal(|_ui| {});
+            //ui.horizontal(|_ui| {});
+            let controller_half_size = 50.0;
             ui.horizontal(|ui| {
-                ui.add_space(14.0);
+                // Virtual Controller
+                ui.add_space(available_width / 2.0 - controller_half_size + 14.0);
                 if ui.button("⏶").clicked() {
                     self.system.get_controller().button_dpad_up = true;
                 }
@@ -160,6 +157,7 @@ impl eframe::App for MyApp {
                 }
             });
             ui.horizontal(|ui| {
+                ui.add_space(available_width / 2.0 - controller_half_size);
                 if ui.button("⏴").clicked() {
                     self.system.get_controller().button_dpad_left = true;
                 }
@@ -176,7 +174,7 @@ impl eframe::App for MyApp {
                 }
             });
             ui.horizontal(|ui| {
-                ui.add_space(14.0);
+                ui.add_space(available_width / 2.0 - controller_half_size + 14.0);
                 if ui.button("⏷").clicked() {
                     self.system.get_controller().button_dpad_down = true;
                 }
@@ -186,8 +184,9 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_cross = true;
                 }
             });
-            ui.horizontal(|_ui| {});
+            //ui.horizontal(|_ui| {});
             ui.horizontal(|ui| {
+                ui.add_space(available_width / 2.0 - controller_half_size);
                 if ui.button("SELECT").clicked() {
                     self.system.get_controller().button_select = true;
                 }
@@ -195,8 +194,8 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_start = true;
                 }
             });
-        });
 
+        });
         // File dialogs
         if let Some(dialog) = &mut self.open_file_dialog {
             if dialog.show(ctx).selected() {
