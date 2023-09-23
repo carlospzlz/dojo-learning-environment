@@ -2,6 +2,7 @@ use egui::{Color32, ColorImage, RichText, Vec2};
 use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
 use log::error;
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
@@ -14,14 +15,29 @@ use psx::System;
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`)
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        error!("Usage: {} <bios> <game>", args[0]);
+        return Ok(());
+    }
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(480.0, 460.0)),
         ..Default::default()
     };
-    eframe::run_native("PSX GUI", options, Box::new(|cc| Box::new(MyApp::new(cc))))
+    eframe::run_native(
+        "PSX GUI",
+        options,
+        Box::new(move |cc| {
+            let bios = args[1].clone();
+            let game = args[2].clone();
+            Box::new(MyApp::new(cc, bios, game))
+        }),
+    )
 }
 
 struct MyApp {
+    bios: String,
+    game: String,
     system: System,
     is_running: bool,
     opened_file: Option<PathBuf>,
@@ -31,13 +47,12 @@ struct MyApp {
 }
 
 impl MyApp {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let bios_filepath = "bios/scph1001.bin";
-        let game_filepath = "roms/tekken.bin";
-        let mut system = System::new(&bios_filepath, &game_filepath);
-        // Register callbacks here
+    fn new(_cc: &eframe::CreationContext<'_>, bios: String, game: String) -> Self {
+        let mut system = System::new(&bios, &game);
         system.reset();
         Self {
+            bios,
+            game,
             system,
             is_running: true,
             opened_file: None,
@@ -110,9 +125,7 @@ impl eframe::App for MyApp {
                     self.system.reset();
                 }
                 if ui.button("Hard Reset").clicked() {
-                    let bios_filepath = "bios/scph1001.bin";
-                    let game_filepath = "roms/tekken.bin";
-                    self.system = System::new(&bios_filepath, &game_filepath);
+                    self.system = System::new(&self.bios, &self.game);
                     self.system.reset();
                 }
                 // File Controls
@@ -204,8 +217,8 @@ impl eframe::App for MyApp {
                     println!("Loading {} ...", filepath);
                     let mut bytes = Vec::new();
                     let mut file = File::open(&filepath).unwrap();
-                    // TODO: error handling
                     let _ = file.read_to_end(&mut bytes).unwrap();
+                    // 'bios' and 'game' filepaths will come from the state
                     self.system = bincode::deserialize(&bytes).unwrap();
                     self.is_running = true;
                 }
