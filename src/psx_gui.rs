@@ -1,6 +1,7 @@
 use egui::{Color32, ColorImage, RichText, Vec2};
 use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
+use log::error;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
@@ -215,11 +216,16 @@ impl eframe::App for MyApp {
                 if let Some(file) = dialog.path() {
                     let filepath = file.to_str().unwrap();
                     println!("Saving {} ...", filepath);
-                    let bytes = bincode::serialize(&self.system).unwrap();
-                    let mut file = File::create(&filepath).unwrap();
-                    // TODO: error handling
-                    let _ = file.write_all(&bytes).unwrap();
-                    self.is_running = true;
+                    match File::create(&filepath) {
+                        Ok(mut file) => {
+                            let bytes = bincode::serialize(&self.system).unwrap();
+                            let _ = file.write_all(&bytes).unwrap();
+                            self.is_running = true;
+                        }
+                        Err(err) => {
+                            error!("{}", err);
+                        }
+                    }
                 }
             }
         }
