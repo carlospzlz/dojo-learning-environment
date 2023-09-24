@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 // Utils to "see" the screen
 mod vision;
@@ -18,6 +19,7 @@ use vision::LifeInfo;
 
 const SIDE_PANEL_WIDTH: f32 = 170.0;
 const STATES_DIR: &str = "states";
+const REPLAY_DURATION: Duration = Duration::from_secs(2);
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`)
@@ -55,6 +57,7 @@ struct MyApp {
     system: System,
     frame: RgbImage,
     is_running: bool,
+    frame_start_time: std::time::Instant,
     opened_file: Option<PathBuf>,
     open_file_dialog: Option<FileDialog>,
     saved_file: Option<PathBuf>,
@@ -65,6 +68,7 @@ struct MyApp {
     current_combat: Option<[Character; 2]>,
     ai_life_info: LifeInfo,
     opponent_life_info: LifeInfo,
+    replay: Option<std::time::Duration>,
 }
 
 impl MyApp {
@@ -77,6 +81,7 @@ impl MyApp {
             system,
             frame: RgbImage::default(),
             is_running: false,
+            frame_start_time: Instant::now(),
             opened_file: None,
             open_file_dialog: None,
             saved_file: None,
@@ -87,6 +92,7 @@ impl MyApp {
             current_combat: None,
             ai_life_info: LifeInfo::default(),
             opponent_life_info: LifeInfo::default(),
+            replay: None,
         }
     }
 }
@@ -134,21 +140,43 @@ impl eframe::App for MyApp {
 
         // Processing
         if self.is_running {
+            //let start_time = Instant::now();
+            //self.run_frame();
+            //let delta_time = Instant::now() - start_time;
+            //if self.replay.is_some() {
+            //    // If reply, show for a certain duration
+            //    let duration = self.replay.unwrap() + delta_time;
+            //    if duration > REPLAY_DURATION {
+            //        self.replay = None;
+            //        self.load_current_combat();
+            //    } else {
+            //        self.replay = Some(duration);
+            //    }
+            //} else {
+            //    // If processing, observe with frequency
+            //    self.process_frame();
+            //}
+
+            //// Reset controller
+            //self.system.get_controller().button_dpad_up = false;
+            //self.system.get_controller().button_dpad_down = false;
+            //self.system.get_controller().button_dpad_left = false;
+            //self.system.get_controller().button_dpad_right = false;
+            //self.system.get_controller().button_triangle = false;
+            //self.system.get_controller().button_square = false;
+            //self.system.get_controller().button_circle = false;
+            //self.system.get_controller().button_cross = false;
+            //self.system.get_controller().button_start = false;
+            //self.system.get_controller().button_select = false;
+
+            //// Request repaint
+            //ctx.request_repaint()
+
             self.process_frame();
+
+            // Request repaint
             ctx.request_repaint()
         }
-
-        // Reset controller
-        self.system.get_controller().button_dpad_up = false;
-        self.system.get_controller().button_dpad_down = false;
-        self.system.get_controller().button_dpad_left = false;
-        self.system.get_controller().button_dpad_right = false;
-        self.system.get_controller().button_triangle = false;
-        self.system.get_controller().button_square = false;
-        self.system.get_controller().button_circle = false;
-        self.system.get_controller().button_cross = false;
-        self.system.get_controller().button_start = false;
-        self.system.get_controller().button_select = false;
     }
 }
 
@@ -368,7 +396,8 @@ impl MyApp {
                     }
                     if ui.button("Next").clicked() {
                         if !self.is_running {
-                            self.system.run_frame();
+                            self.process_frame();
+                            ctx.request_repaint();
                         }
                     }
                 });
@@ -428,23 +457,63 @@ impl MyApp {
     }
 
     fn process_frame(&mut self) {
+        // Run frame
+        let start_time = Instant::now();
+        self.run_frame();
+        let delta_time = Instant::now() - start_time;
+        if self.replay.is_some() {
+            self.update_replay(&delta_time);
+            return;
+        }
+
+        // Get life info
+        let lifes_info = vision::get_life_info(self.frame.clone());
+        self.ai_life_info = lifes_info.0;
+        self.opponent_life_info = lifes_info.1;
+
+        // Check for end of combat
+        if self.ai_life_info.life == 0.0 || self.opponent_life_info.life == 0.0 {
+            println!("End of combat");
+            self.replay = Some(Duration::ZERO);
+            return;
+        }
+
+        self.reset_controller();
+
+        // Feed AI agent here ...
+    }
+
+    fn run_frame(&mut self) {
         self.system.run_frame();
         // Get frame buffer
         let (width, height) = self.system.get_display_size();
         let mut framebuffer = vec![0; width as usize * height as usize * 3].into_boxed_slice();
         self.system.get_framebuffer(&mut framebuffer, false);
         self.frame = convert_framebuffer_to_rgb_image(&framebuffer, width, height);
-        // Get life info
-        let lifes_info = vision::get_life_info(self.frame.clone());
-        // Check for end of combat
-        if lifes_info.0.life == 0.0 || lifes_info.1.life == 0.0 {
-            println!("End of combat");
+    }
+
+    fn update_replay(&mut self, delta_time: &Duration) {
+        // Show for a certain duration and then load state
+        let duration = self.replay.unwrap() + *delta_time;
+        if duration > REPLAY_DURATION {
+            self.replay = None;
             self.load_current_combat();
-            return;
+        } else {
+            self.replay = Some(duration);
         }
-        // Feed AI agent
-        self.ai_life_info = lifes_info.0;
-        self.opponent_life_info = lifes_info.1;
+    }
+
+    fn reset_controller(&mut self) {
+        self.system.get_controller().button_dpad_up = false;
+        self.system.get_controller().button_dpad_down = false;
+        self.system.get_controller().button_dpad_left = false;
+        self.system.get_controller().button_dpad_right = false;
+        self.system.get_controller().button_triangle = false;
+        self.system.get_controller().button_square = false;
+        self.system.get_controller().button_circle = false;
+        self.system.get_controller().button_cross = false;
+        self.system.get_controller().button_start = false;
+        self.system.get_controller().button_select = false;
     }
 }
 
