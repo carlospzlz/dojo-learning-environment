@@ -8,6 +8,8 @@ use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
 
+// Utils to "see" the screen
+mod vision;
 // Emu system
 mod psx;
 
@@ -25,7 +27,7 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
     eframe::run_native(
-        "PSX GUI",
+        "Tekken Learning Environment",
         options,
         Box::new(move |cc| {
             let bios = args[1].clone();
@@ -44,6 +46,7 @@ struct MyApp {
     open_file_dialog: Option<FileDialog>,
     saved_file: Option<PathBuf>,
     save_file_dialog: Option<FileDialog>,
+    vision: bool,
 }
 
 impl MyApp {
@@ -59,6 +62,7 @@ impl MyApp {
             open_file_dialog: None,
             saved_file: None,
             save_file_dialog: None,
+            vision: false,
         }
     }
 }
@@ -80,6 +84,10 @@ impl eframe::App for MyApp {
                 let g = framebuffer[offset + 1];
                 let b = framebuffer[offset + 2];
                 *pixel = Rgb([r, g, b]);
+            }
+
+            if self.vision {
+                img = vision::visualize_life_bars(img);
             }
 
             let asize = ui.available_size();
@@ -147,7 +155,8 @@ impl eframe::App for MyApp {
                     dialog.open();
                     self.save_file_dialog = Some(dialog);
                 }
-                let emu_controls_width = 350.0;
+                ui.checkbox(&mut self.vision, "Vision");
+                let emu_controls_width = 410.0;
                 let space = available_width - emu_controls_width;
                 let space = space.max(0.0);
                 ui.add_space(space);
@@ -208,6 +217,7 @@ impl eframe::App for MyApp {
                     self.system.get_controller().button_start = true;
                 }
             });
+            // Try grid here
         });
         // File dialogs
         if let Some(dialog) = &mut self.open_file_dialog {
