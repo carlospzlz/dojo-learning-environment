@@ -1,12 +1,9 @@
 use egui::{Color32, ColorImage};
-use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
 use log::error;
 use std::env;
 use std::fs::File;
 use std::io::Read;
-use std::io::Write;
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 // Utils to "see" the screen
@@ -55,16 +52,13 @@ enum Character {
 }
 
 struct MyApp {
+    #[allow(dead_code)]
     bios: String,
+    #[allow(dead_code)]
     game: String,
     system: System,
     frame: RgbImage,
     is_running: bool,
-    frame_start_time: std::time::Instant,
-    opened_file: Option<PathBuf>,
-    open_file_dialog: Option<FileDialog>,
-    saved_file: Option<PathBuf>,
-    save_file_dialog: Option<FileDialog>,
     vision: bool,
     character1: Character,
     character2: Character,
@@ -84,11 +78,6 @@ impl MyApp {
             system,
             frame: RgbImage::default(),
             is_running: false,
-            frame_start_time: Instant::now(),
-            opened_file: None,
-            open_file_dialog: None,
-            saved_file: None,
-            save_file_dialog: None,
             vision: false,
             character1: Character::Yoshimitsu,
             character2: Character::Lei,
@@ -107,74 +96,8 @@ impl eframe::App for MyApp {
         self.right_panel(ctx);
         self.central_panel(ctx);
 
-        // File dialogs
-        if let Some(dialog) = &mut self.open_file_dialog {
-            if dialog.show(ctx).selected() {
-                if let Some(file) = dialog.path() {
-                    let filepath = file.to_str().unwrap();
-                    println!("Loading {} ...", filepath);
-                    let mut bytes = Vec::new();
-                    let mut file = File::open(&filepath).unwrap();
-                    let _ = file.read_to_end(&mut bytes).unwrap();
-                    // 'bios' and 'game' filepaths will come from the state
-                    self.system = bincode::deserialize(&bytes).unwrap();
-                    self.is_running = true;
-                }
-            }
-        }
-        if let Some(dialog) = &mut self.save_file_dialog {
-            if dialog.show(ctx).selected() {
-                if let Some(file) = dialog.path() {
-                    let filepath = file.to_str().unwrap();
-                    println!("Saving {} ...", filepath);
-                    match File::create(&filepath) {
-                        Ok(mut file) => {
-                            let bytes = bincode::serialize(&self.system).unwrap();
-                            let _ = file.write_all(&bytes).unwrap();
-                            self.is_running = true;
-                        }
-                        Err(err) => {
-                            error!("{}", err);
-                        }
-                    }
-                }
-            }
-        }
-
         // Processing
         if self.is_running {
-            //let start_time = Instant::now();
-            //self.run_frame();
-            //let delta_time = Instant::now() - start_time;
-            //if self.replay.is_some() {
-            //    // If reply, show for a certain duration
-            //    let duration = self.replay.unwrap() + delta_time;
-            //    if duration > REPLAY_DURATION {
-            //        self.replay = None;
-            //        self.load_current_combat();
-            //    } else {
-            //        self.replay = Some(duration);
-            //    }
-            //} else {
-            //    // If processing, observe with frequency
-            //    self.process_frame();
-            //}
-
-            //// Reset controller
-            //self.system.get_controller().button_dpad_up = false;
-            //self.system.get_controller().button_dpad_down = false;
-            //self.system.get_controller().button_dpad_left = false;
-            //self.system.get_controller().button_dpad_right = false;
-            //self.system.get_controller().button_triangle = false;
-            //self.system.get_controller().button_square = false;
-            //self.system.get_controller().button_circle = false;
-            //self.system.get_controller().button_cross = false;
-            //self.system.get_controller().button_start = false;
-            //self.system.get_controller().button_select = false;
-
-            //// Request repaint
-            //ctx.request_repaint()
-
             self.process_frame();
 
             // Request repaint
@@ -186,22 +109,6 @@ impl eframe::App for MyApp {
 impl MyApp {
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            //// Get frame buffer
-            //let (width, height) = self.system.get_display_size();
-            //let (width, height) = (width as usize, height as usize);
-            //let mut framebuffer = vec![0; width * height * 3].into_boxed_slice();
-            //self.system.get_framebuffer(&mut framebuffer, false);
-
-            //// Scale up
-            //let mut img = RgbImage::new(width as u32, height as u32);
-            //for (x, y, pixel) in img.enumerate_pixels_mut() {
-            //    let offset = ((y as u32 * width as u32 + x as u32) * 3) as usize;
-            //    let r = framebuffer[offset];
-            //    let g = framebuffer[offset + 1];
-            //    let b = framebuffer[offset + 2];
-            //    *pixel = Rgb([r, g, b]);
-            //}
-
             let mut img = self.frame.clone();
             if self.vision {
                 img = vision::visualize_life_bars(img);
@@ -234,57 +141,6 @@ impl MyApp {
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
             let asize = ui.available_size();
             let available_width = asize[0];
-            //ui.horizontal(|ui| {
-            //    // Emulator Controls
-            //    if ui.button("Start").clicked() {
-            //        self.is_running = true;
-            //    }
-            //    if ui.button("Stop").clicked() {
-            //        self.is_running = false;
-            //    }
-            //    if ui.button("Next").clicked() {
-            //        if !self.is_running {
-            //            self.system.run_frame();
-            //        }
-            //    }
-            //    if ui.button("Reset").clicked() {
-            //        self.system.reset();
-            //    }
-            //    if ui.button("Hard Reset").clicked() {
-            //        self.system = System::new(&self.bios, &self.game);
-            //        self.system.reset();
-            //    }
-            //    // File Controls
-            //    if ui.button("Load").clicked() {
-            //        // If user is about to load, probably stop emu
-            //        self.is_running = false;
-            //        let dialog = FileDialog::open_file(self.opened_file.clone());
-            //        let dialog = dialog.title("Load State");
-            //        let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
-            //        dialog.open();
-            //        self.open_file_dialog = Some(dialog);
-            //    }
-            //    if ui.button("Save").clicked() {
-            //        // Stop emu, to save the current state
-            //        self.is_running = false;
-            //        let dialog = FileDialog::save_file(self.saved_file.clone());
-            //        let dialog = dialog.title("Save State");
-            //        let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
-            //        dialog.open();
-            //        self.save_file_dialog = Some(dialog);
-            //    }
-            //    ui.checkbox(&mut self.vision, "Vision");
-            //    let emu_controls_width = 410.0;
-            //    let space = available_width - emu_controls_width;
-            //    let space = space.max(0.0);
-            //    ui.add_space(space);
-            //    if self.is_running {
-            //        ui.label(RichText::new("⏺").color(Color32::LIGHT_GREEN));
-            //    } else {
-            //        ui.label(RichText::new("⏺").color(Color32::GRAY));
-            //    }
-            //});
-            ////ui.horizontal(|_ui| {});
             let controller_half_size = 50.0;
             ui.horizontal(|ui| {
                 // Virtual Controller
@@ -359,6 +215,7 @@ impl MyApp {
                             ui.selectable_value(&mut self.character1, Character::King, "King");
                             ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
                             ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
+                            ui.selectable_value(&mut self.character1, Character::Random, "Random");
                             ui.selectable_value(
                                 &mut self.character1,
                                 Character::Yoshimitsu,
@@ -375,6 +232,7 @@ impl MyApp {
                             ui.selectable_value(&mut self.character2, Character::King, "King");
                             ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
                             ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
+                            ui.selectable_value(&mut self.character1, Character::Random, "Random");
                             ui.selectable_value(
                                 &mut self.character2,
                                 Character::Yoshimitsu,
@@ -431,6 +289,7 @@ impl MyApp {
         let mut file = File::open(&filepath).unwrap();
         let _ = file.read_to_end(&mut bytes).unwrap();
         // 'bios' and 'game' filepaths will come from the state
+        // TODO: Set bios and game
         self.system = bincode::deserialize(&bytes).unwrap();
         self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
     }
@@ -449,20 +308,6 @@ impl MyApp {
                     ui.label(format!("{:.4}", self.opponent_life_info.damage));
                     ui.end_row();
                 });
-                //ui.horizontal(|ui| {
-                //    // Emulator Controls
-                //    if ui.button("Start").clicked() {
-                //        self.is_running = true;
-                //    }
-                //    if ui.button("Stop").clicked() {
-                //        self.is_running = false;
-                //    }
-                //    if ui.button("Next").clicked() {
-                //        if !self.is_running {
-                //            self.system.run_frame();
-                //        }
-                //    }
-                //});
             });
     }
 
