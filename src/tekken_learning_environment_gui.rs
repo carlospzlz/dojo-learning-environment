@@ -45,6 +45,9 @@ fn main() -> Result<(), eframe::Error> {
 
 #[derive(Clone, Debug, PartialEq)]
 enum Character {
+    Eddy,
+    Jin,
+    King,
     Lei,
     Paul,
     Yoshimitsu,
@@ -351,25 +354,32 @@ impl MyApp {
                     egui::ComboBox::from_id_source("ai_character")
                         .selected_text(format!("{:?}", self.character1))
                         .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.character1, Character::Eddy, "Eddy");
+                            ui.selectable_value(&mut self.character1, Character::Jin, "Jin");
+                            ui.selectable_value(&mut self.character1, Character::King, "King");
                             ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
+                            ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
                             ui.selectable_value(
                                 &mut self.character1,
                                 Character::Yoshimitsu,
                                 "Yoshimitsu",
                             );
-                            ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
                         });
                     ui.end_row();
                     ui.label("Opponent");
-                    egui::ComboBox::from_id_source("psx_character")
+                    egui::ComboBox::from_id_source("opponent_character")
                         .selected_text(format!("{:?}", self.character2))
                         .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.character2, Character::Eddy, "Eddy");
+                            ui.selectable_value(&mut self.character2, Character::Jin, "Jin");
+                            ui.selectable_value(&mut self.character2, Character::King, "King");
+                            ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
+                            ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
                             ui.selectable_value(
                                 &mut self.character2,
                                 Character::Yoshimitsu,
                                 "Yoshimitsu",
                             );
-                            ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
                         });
                     ui.end_row();
                     ui.label("Vision");
