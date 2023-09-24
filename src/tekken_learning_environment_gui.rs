@@ -1,4 +1,4 @@
-use egui::{Color32, ColorImage, RichText, Vec2};
+use egui::{Color32, ColorImage};
 use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
 use log::error;
@@ -15,6 +15,8 @@ mod psx;
 
 use psx::System;
 
+const SIDE_PANEL_WIDTH: f32 = 170.0;
+
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`)
     let args: Vec<String> = env::args().collect();
@@ -23,7 +25,7 @@ fn main() -> Result<(), eframe::Error> {
         return Ok(());
     }
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(480.0, 460.0)),
+        initial_window_size: Some(egui::vec2(900.0, 480.0)),
         ..Default::default()
     };
     eframe::run_native(
@@ -37,6 +39,14 @@ fn main() -> Result<(), eframe::Error> {
     )
 }
 
+#[derive(Debug, PartialEq)]
+enum Character {
+    Lei,
+    Paul,
+    Yoshimitsu,
+    Random,
+}
+
 struct MyApp {
     bios: String,
     game: String,
@@ -47,6 +57,8 @@ struct MyApp {
     saved_file: Option<PathBuf>,
     save_file_dialog: Option<FileDialog>,
     vision: bool,
+    character1: Character,
+    character2: Character,
 }
 
 impl MyApp {
@@ -63,12 +75,75 @@ impl MyApp {
             saved_file: None,
             save_file_dialog: None,
             vision: false,
+            character1: Character::Yoshimitsu,
+            character2: Character::Lei,
         }
     }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.bottom_panel(ctx);
+        self.left_panel(ctx);
+        self.right_panel(ctx);
+        self.central_panel(ctx);
+
+        // File dialogs
+        if let Some(dialog) = &mut self.open_file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    let filepath = file.to_str().unwrap();
+                    println!("Loading {} ...", filepath);
+                    let mut bytes = Vec::new();
+                    let mut file = File::open(&filepath).unwrap();
+                    let _ = file.read_to_end(&mut bytes).unwrap();
+                    // 'bios' and 'game' filepaths will come from the state
+                    self.system = bincode::deserialize(&bytes).unwrap();
+                    self.is_running = true;
+                }
+            }
+        }
+        if let Some(dialog) = &mut self.save_file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    let filepath = file.to_str().unwrap();
+                    println!("Saving {} ...", filepath);
+                    match File::create(&filepath) {
+                        Ok(mut file) => {
+                            let bytes = bincode::serialize(&self.system).unwrap();
+                            let _ = file.write_all(&bytes).unwrap();
+                            self.is_running = true;
+                        }
+                        Err(err) => {
+                            error!("{}", err);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Processing
+        if self.is_running {
+            self.system.run_frame();
+            ctx.request_repaint();
+        }
+
+        // Reset controller
+        self.system.get_controller().button_dpad_up = false;
+        self.system.get_controller().button_dpad_down = false;
+        self.system.get_controller().button_dpad_left = false;
+        self.system.get_controller().button_dpad_right = false;
+        self.system.get_controller().button_triangle = false;
+        self.system.get_controller().button_square = false;
+        self.system.get_controller().button_circle = false;
+        self.system.get_controller().button_cross = false;
+        self.system.get_controller().button_start = false;
+        self.system.get_controller().button_select = false;
+    }
+}
+
+impl MyApp {
+    fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Get frame buffer
             let (width, height) = self.system.get_display_size();
@@ -90,11 +165,10 @@ impl eframe::App for MyApp {
                 img = vision::visualize_life_bars(img);
             }
 
+            // Fill all available space
             let asize = ui.available_size();
-            // Adjust so other panels don't occlude it
-            let bottom_panel_height = 110;
             let new_width = asize[0].round() as u32;
-            let new_height = asize[1].round() as u32 - bottom_panel_height;
+            let new_height = asize[1].round() as u32;
 
             // Load texture
             //let img = ColorImage::from_rgb([width, height], &framebuffer);
@@ -112,61 +186,63 @@ impl eframe::App for MyApp {
                 ui.image(&texture, texture.size_vec2());
             });
         });
+    }
 
+    fn bottom_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
             let asize = ui.available_size();
             let available_width = asize[0];
-            ui.horizontal(|ui| {
-                // Emulator Controls
-                if ui.button("Start").clicked() {
-                    self.is_running = true;
-                }
-                if ui.button("Stop").clicked() {
-                    self.is_running = false;
-                }
-                if ui.button("Next").clicked() {
-                    if !self.is_running {
-                        self.system.run_frame();
-                    }
-                }
-                if ui.button("Reset").clicked() {
-                    self.system.reset();
-                }
-                if ui.button("Hard Reset").clicked() {
-                    self.system = System::new(&self.bios, &self.game);
-                    self.system.reset();
-                }
-                // File Controls
-                if ui.button("Load").clicked() {
-                    // If user is about to load, probably stop emu
-                    self.is_running = false;
-                    let dialog = FileDialog::open_file(self.opened_file.clone());
-                    let dialog = dialog.title("Load State");
-                    let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
-                    dialog.open();
-                    self.open_file_dialog = Some(dialog);
-                }
-                if ui.button("Save").clicked() {
-                    // Stop emu, to save the current state
-                    self.is_running = false;
-                    let dialog = FileDialog::save_file(self.saved_file.clone());
-                    let dialog = dialog.title("Save State");
-                    let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
-                    dialog.open();
-                    self.save_file_dialog = Some(dialog);
-                }
-                ui.checkbox(&mut self.vision, "Vision");
-                let emu_controls_width = 410.0;
-                let space = available_width - emu_controls_width;
-                let space = space.max(0.0);
-                ui.add_space(space);
-                if self.is_running {
-                    ui.label(RichText::new("⏺").color(Color32::LIGHT_GREEN));
-                } else {
-                    ui.label(RichText::new("⏺").color(Color32::GRAY));
-                }
-            });
-            //ui.horizontal(|_ui| {});
+            //ui.horizontal(|ui| {
+            //    // Emulator Controls
+            //    if ui.button("Start").clicked() {
+            //        self.is_running = true;
+            //    }
+            //    if ui.button("Stop").clicked() {
+            //        self.is_running = false;
+            //    }
+            //    if ui.button("Next").clicked() {
+            //        if !self.is_running {
+            //            self.system.run_frame();
+            //        }
+            //    }
+            //    if ui.button("Reset").clicked() {
+            //        self.system.reset();
+            //    }
+            //    if ui.button("Hard Reset").clicked() {
+            //        self.system = System::new(&self.bios, &self.game);
+            //        self.system.reset();
+            //    }
+            //    // File Controls
+            //    if ui.button("Load").clicked() {
+            //        // If user is about to load, probably stop emu
+            //        self.is_running = false;
+            //        let dialog = FileDialog::open_file(self.opened_file.clone());
+            //        let dialog = dialog.title("Load State");
+            //        let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
+            //        dialog.open();
+            //        self.open_file_dialog = Some(dialog);
+            //    }
+            //    if ui.button("Save").clicked() {
+            //        // Stop emu, to save the current state
+            //        self.is_running = false;
+            //        let dialog = FileDialog::save_file(self.saved_file.clone());
+            //        let dialog = dialog.title("Save State");
+            //        let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
+            //        dialog.open();
+            //        self.save_file_dialog = Some(dialog);
+            //    }
+            //    ui.checkbox(&mut self.vision, "Vision");
+            //    let emu_controls_width = 410.0;
+            //    let space = available_width - emu_controls_width;
+            //    let space = space.max(0.0);
+            //    ui.add_space(space);
+            //    if self.is_running {
+            //        ui.label(RichText::new("⏺").color(Color32::LIGHT_GREEN));
+            //    } else {
+            //        ui.label(RichText::new("⏺").color(Color32::GRAY));
+            //    }
+            //});
+            ////ui.horizontal(|_ui| {});
             let controller_half_size = 50.0;
             ui.horizontal(|ui| {
                 // Virtual Controller
@@ -219,56 +295,98 @@ impl eframe::App for MyApp {
             });
             // Try grid here
         });
-        // File dialogs
-        if let Some(dialog) = &mut self.open_file_dialog {
-            if dialog.show(ctx).selected() {
-                if let Some(file) = dialog.path() {
-                    let filepath = file.to_str().unwrap();
-                    println!("Loading {} ...", filepath);
-                    let mut bytes = Vec::new();
-                    let mut file = File::open(&filepath).unwrap();
-                    let _ = file.read_to_end(&mut bytes).unwrap();
-                    // 'bios' and 'game' filepaths will come from the state
-                    self.system = bincode::deserialize(&bytes).unwrap();
-                    self.is_running = true;
-                }
-            }
-        }
-        if let Some(dialog) = &mut self.save_file_dialog {
-            if dialog.show(ctx).selected() {
-                if let Some(file) = dialog.path() {
-                    let filepath = file.to_str().unwrap();
-                    println!("Saving {} ...", filepath);
-                    match File::create(&filepath) {
-                        Ok(mut file) => {
-                            let bytes = bincode::serialize(&self.system).unwrap();
-                            let _ = file.write_all(&bytes).unwrap();
-                            self.is_running = true;
-                        }
-                        Err(err) => {
-                            error!("{}", err);
+    }
+
+    fn left_panel(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::left("my_left_panel")
+            .default_width(SIDE_PANEL_WIDTH)
+            .show(ctx, |ui| {
+                // General
+                ui.horizontal(|ui| {
+                    ui.label("General");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
+                });
+                egui::Grid::new("general_options").show(ui, |ui| {
+                    ui.label("AI agent");
+                    egui::ComboBox::from_id_source("ai_character")
+                        .selected_text(format!("{:?}", self.character1))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
+                            ui.selectable_value(
+                                &mut self.character1,
+                                Character::Yoshimitsu,
+                                "Yoshimitsu",
+                            );
+                            ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
+                        });
+                    ui.end_row();
+                    ui.label("Opponent");
+                    egui::ComboBox::from_id_source("psx_character")
+                        .selected_text(format!("{:?}", self.character2))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.character2,
+                                Character::Yoshimitsu,
+                                "Yoshimitsu",
+                            );
+                            ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
+                        });
+                    ui.end_row();
+                    ui.label("Vision");
+                    ui.checkbox(&mut self.vision, "");
+                });
+                ui.horizontal(|_ui| {});
+
+                // Reinforcement Learning
+                ui.horizontal(|ui| {
+                    ui.label("Reinforcement Learning");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
+                });
+                ui.horizontal(|ui| {
+                    // Emulator Controls
+                    if ui.button("Start").clicked() {
+                        self.is_running = true;
+                    }
+                    if ui.button("Stop").clicked() {
+                        self.is_running = false;
+                    }
+                    if ui.button("Next").clicked() {
+                        if !self.is_running {
+                            self.system.run_frame();
                         }
                     }
-                }
-            }
-        }
+                });
+                ui.horizontal(|_ui| {});
 
-        // Processing
-        if self.is_running {
-            self.system.run_frame();
-            ctx.request_repaint();
-        }
+                // Simulation
+                ui.horizontal(|ui| {
+                    ui.label("Simulation");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
+                });
+            });
+    }
 
-        // Reset controller
-        self.system.get_controller().button_dpad_up = false;
-        self.system.get_controller().button_dpad_down = false;
-        self.system.get_controller().button_dpad_left = false;
-        self.system.get_controller().button_dpad_right = false;
-        self.system.get_controller().button_triangle = false;
-        self.system.get_controller().button_square = false;
-        self.system.get_controller().button_circle = false;
-        self.system.get_controller().button_cross = false;
-        self.system.get_controller().button_start = false;
-        self.system.get_controller().button_select = false;
+    fn right_panel(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::right("my_right_panel")
+            .exact_width(SIDE_PANEL_WIDTH)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    // Emulator Controls
+                    if ui.button("Start").clicked() {
+                        self.is_running = true;
+                    }
+                    if ui.button("Stop").clicked() {
+                        self.is_running = false;
+                    }
+                    if ui.button("Next").clicked() {
+                        if !self.is_running {
+                            self.system.run_frame();
+                        }
+                    }
+                });
+            });
     }
 }
