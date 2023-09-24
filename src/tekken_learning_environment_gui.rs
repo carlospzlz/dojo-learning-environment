@@ -10,8 +10,11 @@ use std::time::{Duration, Instant};
 mod vision;
 // Emu system
 mod psx;
+// AI agent
+mod q_learning;
 
 use psx::System;
+use q_learning::Agent;
 use vision::LifeInfo;
 
 const SIDE_PANEL_WIDTH: f32 = 170.0;
@@ -51,6 +54,13 @@ enum Character {
     Random,
 }
 
+#[derive(Debug, PartialEq)]
+enum Vision {
+    PSX,
+    Life,
+    Agent,
+}
+
 struct MyApp {
     #[allow(dead_code)]
     bios: String,
@@ -59,13 +69,16 @@ struct MyApp {
     system: System,
     frame: RgbImage,
     is_running: bool,
-    vision: bool,
+    vision: Vision,
     character1: Character,
     character2: Character,
     current_combat: Option<[Character; 2]>,
-    ai_life_info: LifeInfo,
+    agent_life_info: LifeInfo,
     opponent_life_info: LifeInfo,
     replay: Option<std::time::Duration>,
+    agent: Agent,
+    observation_frequency: u32,
+    time_from_last_observation: std::time::Duration,
 }
 
 impl MyApp {
@@ -78,13 +91,16 @@ impl MyApp {
             system,
             frame: RgbImage::default(),
             is_running: false,
-            vision: false,
+            vision: Vision::PSX,
             character1: Character::Yoshimitsu,
             character2: Character::Lei,
             current_combat: None,
-            ai_life_info: LifeInfo::default(),
+            agent_life_info: LifeInfo::default(),
             opponent_life_info: LifeInfo::default(),
             replay: None,
+            agent: Agent::new(),
+            observation_frequency: 1,
+            time_from_last_observation: Duration::from_secs(1),
         }
     }
 }
@@ -110,8 +126,10 @@ impl MyApp {
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut img = self.frame.clone();
-            if self.vision {
-                img = vision::visualize_life_bars(img);
+            match self.vision {
+                Vision::Agent => img = self.agent.get_state(),
+                Vision::Life => img = vision::visualize_life_bars(img),
+                Vision::PSX => (),
             }
 
             // Fill all available space
@@ -206,8 +224,8 @@ impl MyApp {
                     ui.add(separator.horizontal());
                 });
                 egui::Grid::new("general_options").show(ui, |ui| {
-                    ui.label("AI agent");
-                    egui::ComboBox::from_id_source("ai_character")
+                    ui.label("AI agent:");
+                    egui::ComboBox::from_id_source("agent_character")
                         .selected_text(format!("{:?}", self.character1))
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut self.character1, Character::Eddy, "Eddy");
@@ -223,7 +241,7 @@ impl MyApp {
                             );
                         });
                     ui.end_row();
-                    ui.label("Opponent");
+                    ui.label("Opponent:");
                     egui::ComboBox::from_id_source("opponent_character")
                         .selected_text(format!("{:?}", self.character2))
                         .show_ui(ui, |ui| {
@@ -232,7 +250,7 @@ impl MyApp {
                             ui.selectable_value(&mut self.character2, Character::King, "King");
                             ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
                             ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
-                            ui.selectable_value(&mut self.character1, Character::Random, "Random");
+                            ui.selectable_value(&mut self.character2, Character::Random, "Random");
                             ui.selectable_value(
                                 &mut self.character2,
                                 Character::Yoshimitsu,
@@ -240,8 +258,17 @@ impl MyApp {
                             );
                         });
                     ui.end_row();
+                    ui.label("Obs Freq (Hz):");
+                    ui.add(egui::DragValue::new(&mut self.observation_frequency).speed(0.1));
+                    ui.end_row();
                     ui.label("Vision");
-                    ui.checkbox(&mut self.vision, "");
+                    egui::ComboBox::from_id_source("vision")
+                        .selected_text(format!("{:?}", self.vision))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.vision, Vision::PSX, "PSX");
+                            ui.selectable_value(&mut self.vision, Vision::Life, "Life");
+                            ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
+                        });
                 });
                 ui.horizontal(|_ui| {});
 
@@ -298,15 +325,26 @@ impl MyApp {
         egui::SidePanel::right("my_right_panel")
             .exact_width(SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
-                egui::Grid::new("system_info").show(ui, |ui| {
-                    ui.label("Life");
-                    ui.label(format!("{:.4}", self.ai_life_info.life));
+                ui.horizontal(|ui| {
+                    ui.label("Life Stats");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
+                });
+                egui::Grid::new("life_stats").show(ui, |ui| {
+                    ui.label("Life:");
+                    ui.label(format!("{:.4}", self.agent_life_info.life));
                     ui.label(format!("{:.4}", self.opponent_life_info.life));
                     ui.end_row();
-                    ui.label("Damage");
-                    ui.label(format!("{:.4}", self.ai_life_info.damage));
+                    ui.label("Damage:");
+                    ui.label(format!("{:.4}", self.agent_life_info.damage));
                     ui.label(format!("{:.4}", self.opponent_life_info.damage));
                     ui.end_row();
+                });
+                ui.horizontal(|_ui| {});
+                ui.horizontal(|ui| {
+                    ui.label("AI Agent");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
                 });
             });
     }
@@ -323,11 +361,11 @@ impl MyApp {
 
         // Get life info
         let lifes_info = vision::get_life_info(self.frame.clone());
-        self.ai_life_info = lifes_info.0;
+        self.agent_life_info = lifes_info.0;
         self.opponent_life_info = lifes_info.1;
 
         // Check for end of combat
-        if self.ai_life_info.life == 0.0 || self.opponent_life_info.life == 0.0 {
+        if self.agent_life_info.life == 0.0 || self.opponent_life_info.life == 0.0 {
             println!("End of combat");
             self.replay = Some(Duration::ZERO);
             return;
@@ -335,7 +373,16 @@ impl MyApp {
 
         self.reset_controller();
 
-        // Feed AI agent here ...
+        // Feed AI agent
+        if self.observation_frequency == 0 {
+            return;
+        }
+        self.time_from_last_observation += delta_time;
+        let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
+        if self.time_from_last_observation > period {
+            self.agent.add_state(self.frame.clone());
+            self.time_from_last_observation = Duration::ZERO;
+        }
     }
 
     fn run_frame(&mut self) {
