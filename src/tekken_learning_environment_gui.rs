@@ -14,6 +14,7 @@ mod vision;
 mod psx;
 
 use psx::System;
+use vision::LifeInfo;
 
 const SIDE_PANEL_WIDTH: f32 = 170.0;
 const STATES_DIR: &str = "states";
@@ -52,6 +53,7 @@ struct MyApp {
     bios: String,
     game: String,
     system: System,
+    frame: RgbImage,
     is_running: bool,
     opened_file: Option<PathBuf>,
     open_file_dialog: Option<FileDialog>,
@@ -61,6 +63,8 @@ struct MyApp {
     character1: Character,
     character2: Character,
     current_combat: Option<[Character; 2]>,
+    ai_life_info: LifeInfo,
+    opponent_life_info: LifeInfo,
 }
 
 impl MyApp {
@@ -71,6 +75,7 @@ impl MyApp {
             bios,
             game,
             system,
+            frame: RgbImage::default(),
             is_running: false,
             opened_file: None,
             open_file_dialog: None,
@@ -80,6 +85,8 @@ impl MyApp {
             character1: Character::Yoshimitsu,
             character2: Character::Lei,
             current_combat: None,
+            ai_life_info: LifeInfo::default(),
+            opponent_life_info: LifeInfo::default(),
         }
     }
 }
@@ -127,8 +134,8 @@ impl eframe::App for MyApp {
 
         // Processing
         if self.is_running {
-            self.system.run_frame();
-            ctx.request_repaint();
+            self.process_frame();
+            ctx.request_repaint()
         }
 
         // Reset controller
@@ -148,22 +155,23 @@ impl eframe::App for MyApp {
 impl MyApp {
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Get frame buffer
-            let (width, height) = self.system.get_display_size();
-            let (width, height) = (width as usize, height as usize);
-            let mut framebuffer = vec![0; width * height * 3].into_boxed_slice();
-            self.system.get_framebuffer(&mut framebuffer, false);
+            //// Get frame buffer
+            //let (width, height) = self.system.get_display_size();
+            //let (width, height) = (width as usize, height as usize);
+            //let mut framebuffer = vec![0; width * height * 3].into_boxed_slice();
+            //self.system.get_framebuffer(&mut framebuffer, false);
 
-            // Scale up
-            let mut img = RgbImage::new(width as u32, height as u32);
-            for (x, y, pixel) in img.enumerate_pixels_mut() {
-                let offset = ((y as u32 * width as u32 + x as u32) * 3) as usize;
-                let r = framebuffer[offset];
-                let g = framebuffer[offset + 1];
-                let b = framebuffer[offset + 2];
-                *pixel = Rgb([r, g, b]);
-            }
+            //// Scale up
+            //let mut img = RgbImage::new(width as u32, height as u32);
+            //for (x, y, pixel) in img.enumerate_pixels_mut() {
+            //    let offset = ((y as u32 * width as u32 + x as u32) * 3) as usize;
+            //    let r = framebuffer[offset];
+            //    let g = framebuffer[offset + 1];
+            //    let b = framebuffer[offset + 2];
+            //    *pixel = Rgb([r, g, b]);
+            //}
 
+            let mut img = self.frame.clone();
             if self.vision {
                 img = vision::visualize_life_bars(img);
             }
@@ -350,18 +358,8 @@ impl MyApp {
                 ui.horizontal(|ui| {
                     // Emulator Controls
                     if ui.button("Start").clicked() {
-                        if self.current_combat.is_none()
-                        {
-                            let name1 = format!("{:?}", self.character1).to_lowercase();
-                            let name2 = format!("{:?}", self.character2).to_lowercase();
-                            let filepath = format!("{}/{}_vs_{}.bin", STATES_DIR, name1, name2);
-                            println!("Loading {} ...", filepath);
-                            let mut bytes = Vec::new();
-                            let mut file = File::open(&filepath).unwrap();
-                            let _ = file.read_to_end(&mut bytes).unwrap();
-                            // 'bios' and 'game' filepaths will come from the state
-                            self.system = bincode::deserialize(&bytes).unwrap();
-                            self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
+                        if self.current_combat.is_none() {
+                            self.load_current_combat();
                         }
                         self.is_running = true;
                     }
@@ -385,24 +383,79 @@ impl MyApp {
             });
     }
 
+    fn load_current_combat(&mut self) {
+        let name1 = format!("{:?}", self.character1).to_lowercase();
+        let name2 = format!("{:?}", self.character2).to_lowercase();
+        let filepath = format!("{}/{}_vs_{}.bin", STATES_DIR, name1, name2);
+        println!("Loading {} ...", filepath);
+        let mut bytes = Vec::new();
+        let mut file = File::open(&filepath).unwrap();
+        let _ = file.read_to_end(&mut bytes).unwrap();
+        // 'bios' and 'game' filepaths will come from the state
+        self.system = bincode::deserialize(&bytes).unwrap();
+        self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
+    }
+
     fn right_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("my_right_panel")
             .exact_width(SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    // Emulator Controls
-                    if ui.button("Start").clicked() {
-                        self.is_running = true;
-                    }
-                    if ui.button("Stop").clicked() {
-                        self.is_running = false;
-                    }
-                    if ui.button("Next").clicked() {
-                        if !self.is_running {
-                            self.system.run_frame();
-                        }
-                    }
+                egui::Grid::new("system_info").show(ui, |ui| {
+                    ui.label("Life");
+                    ui.label(format!("{:.4}", self.ai_life_info.life));
+                    ui.label(format!("{:.4}", self.opponent_life_info.life));
+                    ui.end_row();
+                    ui.label("Damage");
+                    ui.label(format!("{:.4}", self.ai_life_info.damage));
+                    ui.label(format!("{:.4}", self.opponent_life_info.damage));
+                    ui.end_row();
                 });
+                //ui.horizontal(|ui| {
+                //    // Emulator Controls
+                //    if ui.button("Start").clicked() {
+                //        self.is_running = true;
+                //    }
+                //    if ui.button("Stop").clicked() {
+                //        self.is_running = false;
+                //    }
+                //    if ui.button("Next").clicked() {
+                //        if !self.is_running {
+                //            self.system.run_frame();
+                //        }
+                //    }
+                //});
             });
     }
+
+    fn process_frame(&mut self) {
+        self.system.run_frame();
+        // Get frame buffer
+        let (width, height) = self.system.get_display_size();
+        let mut framebuffer = vec![0; width as usize * height as usize * 3].into_boxed_slice();
+        self.system.get_framebuffer(&mut framebuffer, false);
+        self.frame = convert_framebuffer_to_rgb_image(&framebuffer, width, height);
+        // Get life info
+        let lifes_info = vision::get_life_info(self.frame.clone());
+        // Check for end of combat
+        if lifes_info.0.life == 0.0 || lifes_info.1.life == 0.0 {
+            println!("End of combat");
+            self.load_current_combat();
+            return;
+        }
+        // Feed AI agent
+        self.ai_life_info = lifes_info.0;
+        self.opponent_life_info = lifes_info.1;
+    }
+}
+
+fn convert_framebuffer_to_rgb_image(framebuffer: &[u8], width: u32, height: u32) -> RgbImage {
+    let mut img = RgbImage::new(width, height);
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        let offset = ((y as u32 * width + x) * 3) as usize;
+        let r = framebuffer[offset];
+        let g = framebuffer[offset + 1];
+        let b = framebuffer[offset + 2];
+        *pixel = Rgb([r, g, b]);
+    }
+    img
 }
