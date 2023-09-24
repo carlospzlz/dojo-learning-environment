@@ -127,7 +127,7 @@ impl MyApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut img = self.frame.clone();
             match self.vision {
-                Vision::Agent => img = self.agent.get_state(),
+                Vision::Agent => img = self.agent.get_last_state_frame(),
                 Vision::Life => img = vision::visualize_life_bars(img),
                 Vision::PSX => (),
             }
@@ -346,6 +346,16 @@ impl MyApp {
                     let separator = egui::Separator::default();
                     ui.add(separator.horizontal());
                 });
+                egui::Grid::new("ai_agent").show(ui, |ui| {
+                    ui.label("Total States:");
+                    let number_of_states = format!("{}", self.agent.get_number_of_states());
+                    ui.label(number_of_states);
+                    ui.end_row();
+                    ui.label("Revisited States:");
+                    let number_of_revisited_states =
+                        format!("{}", self.agent.get_number_of_revisited_states());
+                    ui.label(number_of_revisited_states);
+                });
             });
     }
 
@@ -380,7 +390,7 @@ impl MyApp {
         self.time_from_last_observation += delta_time;
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
         if self.time_from_last_observation > period {
-            self.agent.add_state(self.frame.clone());
+            self.agent.visit_state(self.frame.clone());
             self.time_from_last_observation = Duration::ZERO;
         }
     }
