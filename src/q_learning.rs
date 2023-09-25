@@ -63,3 +63,7 @@ impl Agent {
         self.number_of_revisited_states
     }
 }
+
+fn parallel_linear_search(data: &[State], target: GrayImage) -> {
+
+}
