@@ -1,4 +1,4 @@
-use image::{DynamicImage, GrayImage, Rgb, RgbImage};
+use image::{DynamicImage, GrayImage, RgbImage};
 
 use super::vision;
 
@@ -35,8 +35,7 @@ impl Agent {
     pub fn visit_state(&mut self, frame: RgbImage) {
         let frame = DynamicImage::ImageRgb8(frame).to_luma8();
         for state in &mut self.states {
-            if vision::are_the_same(&state.frame, &frame)
-            {
+            if vision::are_the_same(&state.frame, &frame) {
                 state.times_visited += 1;
                 self.number_of_revisited_states += 1;
                 self.last_visited_state = state.clone();

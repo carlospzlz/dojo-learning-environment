@@ -61,6 +61,24 @@ enum Vision {
     Agent,
 }
 
+struct FrameTime {
+    total_time: Duration,
+    ui_time: Duration,
+    psx_time: Duration,
+    agent_time: Duration,
+}
+
+impl Default for FrameTime {
+    fn default() -> Self {
+        Self {
+            total_time: Duration::ZERO,
+            ui_time: Duration::ZERO,
+            psx_time: Duration::ZERO,
+            agent_time: Duration::ZERO,
+        }
+    }
+}
+
 struct MyApp {
     #[allow(dead_code)]
     bios: String,
@@ -79,6 +97,7 @@ struct MyApp {
     agent: Agent,
     observation_frequency: u32,
     time_from_last_observation: std::time::Duration,
+    frame_time: FrameTime,
 }
 
 impl MyApp {
@@ -101,16 +120,19 @@ impl MyApp {
             agent: Agent::new(),
             observation_frequency: 1,
             time_from_last_observation: Duration::from_secs(1),
+            frame_time: FrameTime::default(),
         }
     }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let start_time = Instant::now();
         self.bottom_panel(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
         self.central_panel(ctx);
+        self.frame_time.ui_time = Instant::now() - start_time;
 
         // Processing
         if self.is_running {
@@ -119,6 +141,7 @@ impl eframe::App for MyApp {
             // Request repaint
             ctx.request_repaint()
         }
+        self.frame_time.total_time = Instant::now() - start_time;
     }
 }
 
@@ -326,6 +349,36 @@ impl MyApp {
             .exact_width(SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    ui.label("Profiling");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
+                });
+                egui::Grid::new("profiling").show(ui, |ui| {
+                    ui.label("FPS:");
+                    if self.frame_time.total_time.as_millis() > 0 {
+                        ui.label(format!(
+                            "{:.2}",
+                            (1000 / self.frame_time.total_time.as_millis())
+                        ));
+                    } else {
+                        ui.label("/0");
+                    }
+                    ui.end_row();
+                    ui.label("Total Time (ms):");
+                    ui.label(format!("{:.2}", self.frame_time.total_time.as_millis()));
+                    ui.end_row();
+                    ui.label("UI Time (ms):");
+                    ui.label(format!("{:.2}", self.frame_time.ui_time.as_millis()));
+                    ui.end_row();
+                    ui.label("PSX Time (ms):");
+                    ui.label(format!("{:.2}", self.frame_time.psx_time.as_millis()));
+                    ui.end_row();
+                    ui.label("Agent Time (ms):");
+                    ui.label(format!("{:.2}", self.frame_time.agent_time.as_millis()));
+                    ui.end_row();
+                });
+                ui.horizontal(|_ui| {});
+                ui.horizontal(|ui| {
                     ui.label("Life Stats");
                     let separator = egui::Separator::default();
                     ui.add(separator.horizontal());
@@ -361,11 +414,9 @@ impl MyApp {
 
     fn process_frame(&mut self) {
         // Run frame
-        let start_time = Instant::now();
         self.run_frame();
-        let delta_time = Instant::now() - start_time;
         if self.replay.is_some() {
-            self.update_replay(&delta_time);
+            self.update_replay(self.frame_time.psx_time.clone());
             return;
         }
 
@@ -387,16 +438,20 @@ impl MyApp {
         if self.observation_frequency == 0 {
             return;
         }
-        self.time_from_last_observation += delta_time;
+        let start_time = Instant::now();
+        self.time_from_last_observation += self.frame_time.total_time;
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
         if self.time_from_last_observation > period {
             self.agent.visit_state(self.frame.clone());
             self.time_from_last_observation = Duration::ZERO;
         }
+        self.frame_time.agent_time = Instant::now() - start_time;
     }
 
     fn run_frame(&mut self) {
+        let start_time = Instant::now();
         self.system.run_frame();
+        self.frame_time.psx_time = Instant::now() - start_time;
         // Get frame buffer
         let (width, height) = self.system.get_display_size();
         let mut framebuffer = vec![0; width as usize * height as usize * 3].into_boxed_slice();
@@ -404,9 +459,9 @@ impl MyApp {
         self.frame = convert_framebuffer_to_rgb_image(&framebuffer, width, height);
     }
 
-    fn update_replay(&mut self, delta_time: &Duration) {
+    fn update_replay(&mut self, delta_time: Duration) {
         // Show for a certain duration and then load state
-        let duration = self.replay.unwrap() + *delta_time;
+        let duration = self.replay.unwrap() + delta_time;
         if duration > REPLAY_DURATION {
             self.replay = None;
             self.load_current_combat();
