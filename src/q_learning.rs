@@ -1,6 +1,7 @@
 use image::{DynamicImage, GrayImage, RgbImage};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Instant;
 
 use super::vision;
 
@@ -35,9 +36,12 @@ impl Agent {
     }
 
     pub fn visit_state(&mut self, frame: RgbImage) {
-        let frame = DynamicImage::ImageRgb8(frame).to_luma8();
-        if self.states.len() < 100
+        let frame = DynamicImage::ImageRgb8(frame).crop(0, 100, 368, 480);
+        let frame = frame.resize_exact(50, 50, image::imageops::FilterType::Lanczos3);
+        let frame = frame.to_luma8();
+        if self.states.len() < 1500
         {
+            let start = Instant::now();
             for state in &mut self.states {
                 if vision::are_the_same(&state.frame, &frame) {
                     state.times_visited += 1;
@@ -46,6 +50,8 @@ impl Agent {
                     return;
                 }
             }
+            let delta = Instant::now() - start;
+            println!("Single thread: {} ms", delta.as_millis());
         }
         else {
             let result = parallel_linear_search(self.states.clone(), frame.clone());
@@ -86,17 +92,21 @@ fn parallel_linear_search(data: Vec<State>, target: GrayImage) -> Option<usize> 
     let result = Arc::new(Mutex::new(None));
     let target = Arc::new(target);
 
-    let chunk_size = data.len() / 4;
+    let chunk_size = data.len() / 8;
     let mut handles = vec![];
 
-    for i in 0..4 {
+    for i in 0..8 {
         let data_clone = Arc::clone(&data);
         let result_clone = Arc::clone(&result);
         let target_clone = Arc::clone(&target);
         let handle = thread::spawn(move || {
+            let start = Instant::now();
             let mut local_result = None;
             let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
             for (index, &ref state) in chunk.iter().enumerate() {
+                if result_clone.lock().unwrap().is_some() {
+                    return;
+                }
                 if vision::are_the_same(&state.frame, &target_clone) {
                     local_result = Some(i * chunk_size + index);
                     break;
@@ -107,6 +117,8 @@ fn parallel_linear_search(data: Vec<State>, target: GrayImage) -> Option<usize> 
             if result.is_none() {
                 *result = local_result;
             }
+            let delta = Instant::now() - start;
+            println!("Thread {:?}: {} ms", thread::current().id(), delta.as_millis());
         });
         handles.push(handle);
     }

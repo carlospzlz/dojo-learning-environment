@@ -88,6 +88,7 @@ struct MyApp {
     frame: RgbImage,
     is_running: bool,
     vision: Vision,
+    split_view: bool,
     character1: Character,
     character2: Character,
     current_combat: Option<[Character; 2]>,
@@ -111,6 +112,7 @@ impl MyApp {
             frame: RgbImage::default(),
             is_running: false,
             vision: Vision::PSX,
+            split_view: false,
             character1: Character::Yoshimitsu,
             character2: Character::Lei,
             current_combat: None,
@@ -148,19 +150,59 @@ impl eframe::App for MyApp {
 impl MyApp {
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let mut img = self.frame.clone();
-            match self.vision {
-                Vision::Agent => img = self.agent.get_last_state_frame(),
-                Vision::Life => img = vision::visualize_life_bars(img),
-                Vision::PSX => (),
-            }
+            //let mut img = self.frame.clone();
+            //match self.vision {
+            //    Vision::Agent => img = self.agent.get_last_state_frame(),
+            //    Vision::Life => img = vision::visualize_life_bars(img),
+            //    Vision::PSX => (),
+            //}
+
+            //// Fill all available space
+            //let asize = ui.available_size();
+            //let new_width = asize[0].round() as u32;
+            //let new_height = asize[1].round() as u32;
+
+            //// Load texture
+            ////let img = ColorImage::from_rgb([width, height], &framebuffer);
+            //let img = image::imageops::resize(
+            //    &img,
+            //    new_width,
+            //    new_height,
+            //    image::imageops::FilterType::Lanczos3,
+            //);
+            //let img = ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
+            //let texture = ctx.load_texture("psx_screen", img, Default::default());
+
+            //// Show frame
+            //ui.horizontal(|ui| {
+            //    ui.image(&texture, texture.size_vec2());
+            //});
 
             // Fill all available space
             let asize = ui.available_size();
-            let new_width = asize[0].round() as u32;
-            let new_height = asize[1].round() as u32;
+            let new_width = (asize[0].round() / 2.0) as u32;
+            let new_height = (asize[1].round() / 2.0) as u32;
+
+            let mut img = self.frame.clone();
 
             // Load texture
+            //let img = ColorImage::from_rgb([width, height], &framebuffer);
+            let img = image::imageops::resize(
+                &img,
+                new_width,
+                new_height,
+                image::imageops::FilterType::Lanczos3,
+            );
+            let img = ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
+            let texture = ctx.load_texture("psx_screen", img, Default::default());
+
+            // Show frame
+            ui.horizontal(|ui| {
+                ui.image(&texture, texture.size_vec2());
+            });
+
+            let mut img = self.agent.get_last_state_frame();
+
             //let img = ColorImage::from_rgb([width, height], &framebuffer);
             let img = image::imageops::resize(
                 &img,
@@ -292,6 +334,9 @@ impl MyApp {
                             ui.selectable_value(&mut self.vision, Vision::Life, "Life");
                             ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
                         });
+                    ui.end_row();
+                    ui.label("Split View");
+                    ui.checkbox(&mut self.split_view, "");
                 });
                 ui.horizontal(|_ui| {});
 

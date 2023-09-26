@@ -1,12 +1,13 @@
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 
-const PSX_FRAME_SIZE: [u32; 2] = [368, 480];
+// TODO: Ask the size to the img
+const PSX_FRAME_SIZE: [u32; 2] = [50, 50];
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
 const PLAYER_1_LIFE_BAR_X: [u32; 2] = [12, 164];
 const PLAYER_2_LIFE_BAR_X: [u32; 2] = [204, 356];
 const VISUALIZATION_BAR_HEIGHT: u32 = 7;
-const FRAME_MSE_THRESHOLD: f32 = 0.01;
+const FRAME_MSE_THRESHOLD: f32 = 0.005;
 
 pub struct LifeInfo {
     pub life: f32,
