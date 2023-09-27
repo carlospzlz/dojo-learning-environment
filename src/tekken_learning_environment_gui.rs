@@ -99,6 +99,11 @@ struct MyApp {
     observation_frequency: u32,
     time_from_last_observation: std::time::Duration,
     frame_time: FrameTime,
+    learning_rate: f32,
+    discount_factor: f32,
+    hist_threshold: u32,
+    blur: f32,
+    median_filter: u32,
 }
 
 impl MyApp {
@@ -120,9 +125,14 @@ impl MyApp {
             opponent_life_info: LifeInfo::default(),
             replay: None,
             agent: Agent::new(),
-            observation_frequency: 30,
+            observation_frequency: 10,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
+            learning_rate: 0.5,
+            discount_factor: 0.9,
+            hist_threshold: 85,
+            blur: 1.0,
+            median_filter: 3,
         }
     }
 }
@@ -150,13 +160,6 @@ impl eframe::App for MyApp {
 impl MyApp {
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            let mut img = self.frame.clone();
-            match self.vision {
-                Vision::Agent => img = self.agent.get_last_state_frame(),
-                Vision::Life => img = vision::visualize_life_bars(img),
-                Vision::PSX => (),
-            }
-
             // Fill all available space
             let asize = ui.available_size();
             let new_width = asize[0].round() as u32;
@@ -165,6 +168,28 @@ impl MyApp {
             } else {
                 asize[1].round()
             } as u32;
+
+            // If split view, always show PSX view
+            let img = self.frame.clone();
+            if self.split_view {
+                let img = DynamicImage::ImageRgb8(img);
+                let img =
+                    img.resize_exact(new_width, new_height, image::imageops::FilterType::Lanczos3);
+                let img = img.to_rgb8();
+                let img =
+                    ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
+                let texture = ctx.load_texture("psx_frame", img, Default::default());
+                ui.image(&texture, texture.size_vec2());
+            }
+
+            // Show vision chosen by user
+            let mut img = self.frame.clone();
+            match self.vision {
+                Vision::Agent => img = self.agent.get_last_state_abstraction(),
+                Vision::Life => img = vision::visualize_life_bars(img),
+                Vision::PSX => (),
+            }
+
             let img = DynamicImage::ImageRgb8(img);
             let img =
                 img.resize_exact(new_width, new_height, image::imageops::FilterType::Lanczos3);
@@ -176,19 +201,6 @@ impl MyApp {
 
             // Show frame
             ui.image(&texture, texture.size_vec2());
-
-            // If split view, show Agent's view
-            if self.split_view {
-                let img = self.agent.get_last_state_frame();
-                let img = DynamicImage::ImageRgb8(img);
-                let img =
-                    img.resize_exact(new_width, new_height, image::imageops::FilterType::Lanczos3);
-                let img = img.to_rgb8();
-                let img =
-                    ColorImage::from_rgb([new_width as usize, new_height as usize], img.as_raw());
-                let texture = ctx.load_texture("psx_frame", img, Default::default());
-                ui.image(&texture, texture.size_vec2());
-            }
         });
     }
 
@@ -200,40 +212,78 @@ impl MyApp {
             ui.horizontal(|ui| {
                 // Virtual Controller
                 ui.add_space(available_width / 2.0 - controller_half_size + 14.0);
-                if ui.button("⏶").clicked() {
+                let mut up_button = egui::Button::new("⏶");
+                if self.system.get_controller().button_dpad_up {
+                    up_button = up_button.fill(Color32::LIGHT_GREEN);
+                }
+                if ui.add(up_button).clicked() {
                     self.system.get_controller().button_dpad_up = true;
                 }
                 ui.add_space(30.0);
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(64, 226, 160));
-                if ui.button("∆").clicked() {
+                let mut triangle_button = egui::Button::new("∆");
+                if self.system.get_controller().button_triangle {
+                    triangle_button = triangle_button.fill(Color32::LIGHT_GREEN);
+                }
+                if ui.add(triangle_button).clicked() {
                     self.system.get_controller().button_triangle = true;
                 }
             });
             ui.horizontal(|ui| {
                 ui.add_space(available_width / 2.0 - controller_half_size);
-                if ui.button("⏴").clicked() {
+                // Left Arrow
+                let mut left_button = egui::Button::new("⏴");
+                if self.system.get_controller().button_dpad_left {
+                    left_button = left_button.fill(Color32::LIGHT_GREEN);
+                }
+                if ui.add(left_button).clicked() {
                     self.system.get_controller().button_dpad_left = true;
                 }
-                if ui.button("⏵").clicked() {
+                // Right Arrow
+                let mut right_button = egui::Button::new("⏵");
+                if self.system.get_controller().button_dpad_right {
+                    right_button = right_button.fill(Color32::LIGHT_GREEN);
+                }
+                if ui.add(right_button).clicked() {
                     self.system.get_controller().button_dpad_right = true;
                 }
+                // Square Button
+                let mut square_button = egui::Button::new("◻");
+                if self.system.get_controller().button_square {
+                    square_button = square_button.fill(Color32::LIGHT_GREEN);
+                }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 105, 248));
-                if ui.button("◻").clicked() {
+                if ui.add(square_button).clicked() {
                     self.system.get_controller().button_square = true;
                 }
+                // Circle Button
+                let mut circle_button = egui::Button::new("○");
+                if self.system.get_controller().button_circle {
+                    circle_button = circle_button.fill(Color32::LIGHT_GREEN);
+                }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 102, 102));
-                if ui.button("○").clicked() {
+                if ui.add(circle_button).clicked() {
                     self.system.get_controller().button_circle = true;
                 }
             });
             ui.horizontal(|ui| {
+                // Down Arrow
                 ui.add_space(available_width / 2.0 - controller_half_size + 14.0);
-                if ui.button("⏷").clicked() {
+                let mut down_button = egui::Button::new("⏷");
+                if self.system.get_controller().button_dpad_down {
+                    down_button = down_button.fill(Color32::LIGHT_GREEN);
+                }
+                if ui.add(down_button).clicked() {
                     self.system.get_controller().button_dpad_down = true;
                 }
                 ui.add_space(29.0);
+                // Cross Button
+                let mut cross_button = egui::Button::new("🗙");
+                if self.system.get_controller().button_cross {
+                    cross_button = cross_button.fill(Color32::LIGHT_GREEN);
+                }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(124, 178, 232));
-                if ui.button("🗙").clicked() {
+                if ui.add(cross_button).clicked() {
                     self.system.get_controller().button_cross = true;
                 }
             });
@@ -246,7 +296,6 @@ impl MyApp {
                     self.system.get_controller().button_start = true;
                 }
             });
-            // Try grid here
         });
     }
 
@@ -307,8 +356,26 @@ impl MyApp {
                             ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
                         });
                     ui.end_row();
-                    ui.label("Split View (Agent)");
+                    ui.label("Split View");
                     ui.checkbox(&mut self.split_view, "");
+                });
+                ui.horizontal(|_ui| {});
+
+                // Vision Pipeline
+                ui.horizontal(|ui| {
+                    ui.label("Vision Pipeline");
+                    let separator = egui::Separator::default();
+                    ui.add(separator.horizontal());
+                });
+                egui::Grid::new("vision_pipeline").show(ui, |ui| {
+                    ui.label("Hist");
+                    ui.add(egui::Slider::new(&mut self.hist_threshold, 0..=170));
+                    ui.end_row();
+                    ui.label("Blur");
+                    ui.add(egui::Slider::new(&mut self.blur, 0.0..=2.0));
+                    ui.end_row();
+                    ui.label("Median");
+                    ui.add(egui::Slider::new(&mut self.median_filter, 0..=6));
                 });
                 ui.horizontal(|_ui| {});
 
@@ -318,6 +385,18 @@ impl MyApp {
                     let separator = egui::Separator::default();
                     ui.add(separator.horizontal());
                 });
+                egui::Grid::new("reinforcement_learning").show(ui, |ui| {
+                    ui.label("Learning Rate:");
+                    let learning_rate_widget = egui::DragValue::new(&mut self.learning_rate);
+                    let learning_rate_widget = learning_rate_widget.speed(0.1).clamp_range(0..=1);
+                    ui.add(learning_rate_widget);
+                    ui.end_row();
+                    ui.label("Discount Factor:");
+                    let learning_rate_widget = egui::DragValue::new(&mut self.discount_factor);
+                    let learning_rate_widget = learning_rate_widget.speed(0.1).clamp_range(0..=1);
+                    ui.add(learning_rate_widget);
+                });
+                ui.horizontal(|_ui| {});
                 ui.horizontal(|ui| {
                     // Emulator Controls
                     if ui.button("Start").clicked() {
@@ -337,7 +416,6 @@ impl MyApp {
                     }
                 });
                 ui.horizontal(|_ui| {});
-
                 // Simulation
                 ui.horizontal(|ui| {
                     ui.label("Simulation");
@@ -459,7 +537,13 @@ impl MyApp {
         self.time_from_last_observation += self.frame_time.total_time;
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
         if self.time_from_last_observation > period {
-            self.agent.visit_state(self.frame.clone());
+            self.agent.set_hist_threshold(self.hist_threshold);
+            self.agent.set_blur(self.blur);
+            self.agent.set_median_filter(self.median_filter);
+            // REWARD
+            let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
+            let action = self.agent.visit_state(self.frame.clone(), reward);
+            self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
         }
         self.frame_time.agent_time = Instant::now() - start_time;
@@ -498,6 +582,17 @@ impl MyApp {
         self.system.get_controller().button_cross = false;
         self.system.get_controller().button_start = false;
         self.system.get_controller().button_select = false;
+    }
+
+    fn set_controller(&mut self, action: u8) {
+        self.system.get_controller().button_dpad_up = (action & 1 << 0) != 0;
+        self.system.get_controller().button_dpad_down = (action & 1 << 1) != 0;
+        self.system.get_controller().button_dpad_left = (action & 1 << 2) != 0;
+        self.system.get_controller().button_dpad_right = (action & 1 << 3) != 0;
+        self.system.get_controller().button_triangle = (action & 1 << 4) != 0;
+        self.system.get_controller().button_square = (action & 1 << 5) != 0;
+        self.system.get_controller().button_circle = (action & 1 << 6) != 0;
+        self.system.get_controller().button_cross = (action & 1 << 7) != 0;
     }
 }
 

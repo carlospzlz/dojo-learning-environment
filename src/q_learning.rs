@@ -1,27 +1,32 @@
-use image::{DynamicImage, GrayImage, RgbImage};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Instant;
+use image::RgbImage;
+use rand::Rng;
 
 use super::vision;
 
 pub struct Agent {
     states: Vec<State>,
-    last_visited_state: State,
+    previous_index: Option<usize>,
+    previous_action: Option<u8>,
     number_of_revisited_states: usize,
+    discount_factor: f32,
+    learning_rate: f32,
+    hist_threshold: u32,
+    blur: f32,
+    median_filter: u32,
+    max_mse: f32,
 }
 
 #[derive(Clone)]
 struct State {
-    frame: GrayImage,
-    times_visited: usize,
+    frame_abstraction: RgbImage,
+    q: [f32; 256],
 }
 
-impl Default for State {
-    fn default() -> Self {
+impl State {
+    fn new(frame_abstraction: RgbImage) -> Self {
         Self {
-            frame: GrayImage::default(),
-            times_visited: 0,
+            frame_abstraction,
+            q: [0.0; 256],
         }
     }
 }
@@ -30,46 +35,85 @@ impl Agent {
     pub fn new() -> Self {
         Self {
             states: Vec::<State>::new(),
-            last_visited_state: State::default(),
+            previous_index: None,
+            previous_action: None,
             number_of_revisited_states: 0,
+            discount_factor: 0.9,
+            learning_rate: 0.5,
+            hist_threshold: 85,
+            blur: 1.0,
+            median_filter: 3,
+            max_mse: 0.03,
         }
     }
 
-    pub fn visit_state(&mut self, frame: RgbImage) {
-        let frame = DynamicImage::ImageRgb8(frame).crop(0, 100, 368, 480);
-        // SO IMPORTANT to do a resize, otherwise the state search time explodes
-        let frame = frame.resize(50, 50, image::imageops::FilterType::Lanczos3);
-        let frame = frame.to_luma8();
-        for state in &mut self.states {
-            if vision::are_the_same(&state.frame, &frame) {
-                state.times_visited += 1;
-                self.number_of_revisited_states += 1;
-                self.last_visited_state = state.clone();
-                return;
+    pub fn visit_state(&mut self, frame: RgbImage, reward: f32) -> u8 {
+        // We need a way to recognize equivalent states
+        // This is one of the most important/challenging parts
+        let frame_abstraction = vision::get_frame_abstraction(
+            &frame,
+            self.hist_threshold,
+            self.blur,
+            self.median_filter,
+        );
+
+        // Search or Add
+        let current_index: usize;
+        let current_action: u8;
+        let max_q: f32;
+        if let Some(index) = self.search_state(&frame_abstraction) {
+            // Existing state
+            let current_state = &self.states[index];
+            (current_action, max_q) = choose_best_action(current_state);
+            self.number_of_revisited_states += 1;
+            current_index = index;
+        } else {
+            // New state
+            current_index = self.states.len();
+            self.states.push(State::new(frame_abstraction));
+            let mut rng = rand::thread_rng();
+            current_action = rng.gen_range(0..=255);
+            max_q = -1.0;
+        }
+
+        // Heart of Q-Learning
+        if let Some(previous_index) = self.previous_index {
+            let previous_state = &mut self.states[previous_index];
+            let act = self.previous_action.unwrap() as usize;
+            let temporal_difference = reward + self.discount_factor * max_q - previous_state.q[act];
+            previous_state.q[act] =
+                previous_state.q[act] + self.learning_rate * temporal_difference;
+        }
+
+        self.previous_index = Some(current_index);
+        self.previous_action = Some(current_action);
+
+        current_action
+    }
+
+    fn search_state(&self, target: &RgbImage) -> Option<usize> {
+        let mut min_mse: f32 = (1 << 16) as f32;
+        let mut best_index = 0;
+        for (index, state) in &mut self.states.iter().enumerate() {
+            let mse = vision::get_mse(&state.frame_abstraction, &target);
+            // get_color_mse_foreground could be a good idea
+            // Or be stricter with max_mse
+            if mse < min_mse {
+                min_mse = mse;
+                best_index = index;
             }
         }
-        //} else {
-        //    let result = parallel_linear_search(self.states.clone(), frame.clone());
-        //    if let Some(index) = result {
-        //        let index = index;
-        //        self.states[index].times_visited += 1;
-        //        self.number_of_revisited_states += 1;
-        //        self.last_visited_state = self.states[index].clone();
-        //        return;
-        //    }
-        //}
-
-        let state = State {
-            frame,
-            times_visited: 0,
-        };
-        self.last_visited_state = state.clone();
-        self.states.push(state);
+        if min_mse < self.max_mse {
+            return Some(best_index);
+        }
+        None
     }
 
-    pub fn get_last_state_frame(&self) -> RgbImage {
-        let img = self.last_visited_state.frame.clone();
-        DynamicImage::ImageLuma8(img).to_rgb8()
+    pub fn get_last_state_abstraction(&self) -> RgbImage {
+        if let Some(previous_index) = self.previous_index {
+            return self.states[previous_index].frame_abstraction.clone();
+        }
+        RgbImage::default()
     }
 
     pub fn get_number_of_states(&self) -> usize {
@@ -79,53 +123,77 @@ impl Agent {
     pub fn get_number_of_revisited_states(&self) -> usize {
         self.number_of_revisited_states
     }
-}
 
-#[allow(dead_code)]
-fn parallel_linear_search(data: Vec<State>, target: GrayImage) -> Option<usize> {
-    let data = Arc::new(data);
-    let result = Arc::new(Mutex::new(None));
-    let target = Arc::new(target);
-
-    let chunk_size = data.len() / 8;
-    let mut handles = vec![];
-
-    for i in 0..8 {
-        let data_clone = Arc::clone(&data);
-        let result_clone = Arc::clone(&result);
-        let target_clone = Arc::clone(&target);
-        let handle = thread::spawn(move || {
-            let start = Instant::now();
-            let mut local_result = None;
-            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
-            for (index, &ref state) in chunk.iter().enumerate() {
-                if result_clone.lock().unwrap().is_some() {
-                    return;
-                }
-                if vision::are_the_same(&state.frame, &target_clone) {
-                    local_result = Some(i * chunk_size + index);
-                    break;
-                }
-            }
-            // Lock the mutex to update result
-            let mut result = result_clone.lock().unwrap();
-            if result.is_none() {
-                *result = local_result;
-            }
-            let delta = Instant::now() - start;
-            println!(
-                "Thread {:?}: {} ms",
-                thread::current().id(),
-                delta.as_millis()
-            );
-        });
-        handles.push(handle);
+    pub fn set_hist_threshold(&mut self, val: u32) {
+        self.hist_threshold = val;
     }
 
-    for handle in handles {
-        handle.join().unwrap();
+    pub fn set_blur(&mut self, val: f32) {
+        self.blur = val;
     }
 
-    let result = result.lock().unwrap();
-    *result
+    pub fn set_median_filter(&mut self, val: u32) {
+        self.median_filter = val;
+    }
 }
+
+fn choose_best_action(state: &State) -> (u8, f32) {
+    let mut max_q = -1.0;
+    let mut best_action = 0;
+    for (action, &q) in state.q.iter().enumerate() {
+        if q > max_q {
+            best_action = action as u8;
+            max_q = q;
+        }
+    }
+    (best_action, max_q)
+}
+
+//#[allow(dead_code)]
+//fn parallel_linear_search(data: Vec<State>, target: GrayImage) -> Option<usize> {
+//    let data = Arc::new(data);
+//    let result = Arc::new(Mutex::new(None));
+//    let target = Arc::new(target);
+//
+//    let chunk_size = data.len() / 8;
+//    let mut handles = vec![];
+//
+//    for i in 0..8 {
+//        let data_clone = Arc::clone(&data);
+//        let result_clone = Arc::clone(&result);
+//        let target_clone = Arc::clone(&target);
+//        let handle = thread::spawn(move || {
+//            let start = Instant::now();
+//            let mut local_result = None;
+//            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
+//            for (index, &ref state) in chunk.iter().enumerate() {
+//                if result_clone.lock().unwrap().is_some() {
+//                    return;
+//                }
+//                if vision::are_the_same(&state.frame, &target_clone) {
+//                    local_result = Some(i * chunk_size + index);
+//                    break;
+//                }
+//            }
+//            // Lock the mutex to update result
+//            let mut result = result_clone.lock().unwrap();
+//            if result.is_none() {
+//                *result = local_result;
+//            }
+//            let delta = Instant::now() - start;
+//            println!(
+//                "Thread {:?}: {} ms",
+//                thread::current().id(),
+//                delta.as_millis()
+//            );
+//        });
+//        handles.push(handle);
+//    }
+//
+//    for handle in handles {
+//        handle.join().unwrap();
+//    }
+//
+//    let result = result.lock().unwrap();
+//    *result
+//}
