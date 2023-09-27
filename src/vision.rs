@@ -1,12 +1,11 @@
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 
-const PSX_FRAME_SIZE: [u32; 2] = [368, 480];
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
 const PLAYER_1_LIFE_BAR_X: [u32; 2] = [12, 164];
 const PLAYER_2_LIFE_BAR_X: [u32; 2] = [204, 356];
 const VISUALIZATION_BAR_HEIGHT: u32 = 7;
-const FRAME_MSE_THRESHOLD: f32 = 0.01;
+const FRAME_MSE_THRESHOLD: f32 = 0.005;
 
 pub struct LifeInfo {
     pub life: f32,
@@ -74,15 +73,24 @@ fn get_life_info_for_player(img: &GrayImage, x_limits: [u32; 2]) -> LifeInfo {
 }
 
 pub fn are_the_same(img1: &GrayImage, img2: &GrayImage) -> bool {
+    if (img1.width() != img2.width()) || (img1.height() != img2.height()) {
+        panic!(
+            "Image dimensions differ: {}x{}, {}x{}",
+            img1.width(),
+            img1.height(),
+            img2.width(),
+            img2.height()
+        );
+    }
     let mut sum_squared_diff: i32 = 0;
-    for x in 0..PSX_FRAME_SIZE[0] {
-        for y in 0..PSX_FRAME_SIZE[1] {
+    for x in 0..img1.width() {
+        for y in 0..img1.height() {
             let val1 = img1.get_pixel(x, y)[0] as i32;
             let val2 = img2.get_pixel(x, y)[0] as i32;
             sum_squared_diff += (val1 - val2).pow(2);
         }
     }
-    let total_pixels = (PSX_FRAME_SIZE[0] * PSX_FRAME_SIZE[1]) as f32;
+    let total_pixels = (img1.width() * img1.height()) as f32;
     let mse = sum_squared_diff as f32 / total_pixels;
     // Normalize (max MSE is 255^2)
     let mse = mse / (1 << 16) as f32;
