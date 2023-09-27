@@ -120,7 +120,7 @@ impl MyApp {
             opponent_life_info: LifeInfo::default(),
             replay: None,
             agent: Agent::new(),
-            observation_frequency: 1,
+            observation_frequency: 30,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
         }
