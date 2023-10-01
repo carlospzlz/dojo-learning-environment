@@ -29,7 +29,7 @@ fn main() -> Result<(), eframe::Error> {
         return Ok(());
     }
     let options = eframe::NativeOptions {
-        initial_window_size: Some(egui::vec2(900.0, 480.0)),
+        initial_window_size: Some(egui::vec2(750.0, 550.0)),
         ..Default::default()
     };
     eframe::run_native(
@@ -104,6 +104,7 @@ struct MyApp {
     hist_threshold: u32,
     blur: f32,
     median_filter: u32,
+    max_mse: f32,
 }
 
 impl MyApp {
@@ -116,8 +117,8 @@ impl MyApp {
             system,
             frame: RgbImage::default(),
             is_running: false,
-            vision: Vision::PSX,
-            split_view: false,
+            vision: Vision::Agent,
+            split_view: true,
             character1: Character::Yoshimitsu,
             character2: Character::Lei,
             current_combat: None,
@@ -133,6 +134,7 @@ impl MyApp {
             hist_threshold: 85,
             blur: 1.0,
             median_filter: 3,
+            max_mse: 0.03,
         }
     }
 }
@@ -376,6 +378,9 @@ impl MyApp {
                     ui.end_row();
                     ui.label("Median");
                     ui.add(egui::Slider::new(&mut self.median_filter, 0..=6));
+                    ui.end_row();
+                    ui.label("MSE");
+                    ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=0.05).max_decimals(3));
                 });
                 ui.horizontal(|_ui| {});
 
@@ -388,13 +393,14 @@ impl MyApp {
                 egui::Grid::new("reinforcement_learning").show(ui, |ui| {
                     ui.label("Learning Rate:");
                     let learning_rate_widget = egui::DragValue::new(&mut self.learning_rate);
-                    let learning_rate_widget = learning_rate_widget.speed(0.1).clamp_range(0..=1);
+                    let learning_rate_widget = learning_rate_widget.speed(0.01).clamp_range(0..=1);
                     ui.add(learning_rate_widget);
                     ui.end_row();
                     ui.label("Discount Factor:");
-                    let learning_rate_widget = egui::DragValue::new(&mut self.discount_factor);
-                    let learning_rate_widget = learning_rate_widget.speed(0.1).clamp_range(0..=1);
-                    ui.add(learning_rate_widget);
+                    let discount_factor_widget = egui::DragValue::new(&mut self.discount_factor);
+                    let discount_factor_widget =
+                        discount_factor_widget.speed(0.01).clamp_range(0..=1);
+                    ui.add(discount_factor_widget);
                 });
                 ui.horizontal(|_ui| {});
                 ui.horizontal(|ui| {
@@ -540,6 +546,7 @@ impl MyApp {
             self.agent.set_hist_threshold(self.hist_threshold);
             self.agent.set_blur(self.blur);
             self.agent.set_median_filter(self.median_filter);
+            self.agent.set_max_mse(self.max_mse);
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
             let action = self.agent.visit_state(self.frame.clone(), reward);

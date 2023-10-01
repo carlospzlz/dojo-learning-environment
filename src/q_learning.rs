@@ -7,6 +7,7 @@ pub struct Agent {
     states: Vec<State>,
     previous_index: Option<usize>,
     previous_action: Option<u8>,
+    previous_q: Option<f32>,
     number_of_revisited_states: usize,
     discount_factor: f32,
     learning_rate: f32,
@@ -37,6 +38,7 @@ impl Agent {
             states: Vec::<State>::new(),
             previous_index: None,
             previous_action: None,
+            previous_q: None,
             number_of_revisited_states: 0,
             discount_factor: 0.9,
             learning_rate: 0.5,
@@ -73,20 +75,26 @@ impl Agent {
             self.states.push(State::new(frame_abstraction));
             let mut rng = rand::thread_rng();
             current_action = rng.gen_range(0..=255);
-            max_q = -1.0;
+            max_q = 0.0;
         }
 
         // Heart of Q-Learning
         if let Some(previous_index) = self.previous_index {
+            //let reward = (reward + 1.0) / 2.0;
+            //print!("Reward: {}\t", reward);
             let previous_state = &mut self.states[previous_index];
             let act = self.previous_action.unwrap() as usize;
+            //print!("Max Q: {}\t", max_q);
             let temporal_difference = reward + self.discount_factor * max_q - previous_state.q[act];
+            //print!("Previous: {}\t", previous_state.q[act]);
             previous_state.q[act] =
                 previous_state.q[act] + self.learning_rate * temporal_difference;
+            //println!("Next: {}", previous_state.q[act]);
         }
 
         self.previous_index = Some(current_index);
         self.previous_action = Some(current_action);
+        self.previous_q = Some(max_q);
 
         current_action
     }
@@ -110,8 +118,10 @@ impl Agent {
     }
 
     pub fn get_last_state_abstraction(&self) -> RgbImage {
-        if let Some(previous_index) = self.previous_index {
-            return self.states[previous_index].frame_abstraction.clone();
+        if let (Some(index), Some(q)) = (self.previous_index, self.previous_q) {
+            let mut frame = self.states[index].frame_abstraction.clone();
+            vision::enclose_with_q(&mut frame, q);
+            return frame;
         }
         RgbImage::default()
     }
@@ -135,18 +145,27 @@ impl Agent {
     pub fn set_median_filter(&mut self, val: u32) {
         self.median_filter = val;
     }
+
+    pub fn set_max_mse(&mut self, val: f32) {
+        self.max_mse = val;
+    }
 }
 
 fn choose_best_action(state: &State) -> (u8, f32) {
-    let mut max_q = -1.0;
-    let mut best_action = 0;
+    let mut max_q = 0.0;
+    let mut best_action = None;
     for (action, &q) in state.q.iter().enumerate() {
         if q > max_q {
-            best_action = action as u8;
+            best_action = Some(action as u8);
             max_q = q;
         }
     }
-    (best_action, max_q)
+    if let Some(best_action) = best_action {
+        println!("Chosen!: 0b{:08b} ({})", best_action, max_q);
+        return (best_action, max_q);
+    }
+    let mut rng = rand::thread_rng();
+    (rng.gen_range(0..=255), max_q)
 }
 
 //#[allow(dead_code)]

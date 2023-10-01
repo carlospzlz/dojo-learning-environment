@@ -152,3 +152,22 @@ pub fn remove_more_frequent_than(img: &mut RgbImage, histogram: &Vec<Vec<Vec<u32
         }
     }
 }
+
+pub fn enclose_with_q(img: &mut RgbImage, q: f32) {
+    if q == 0.0 {
+        return;
+    }
+    let color = if q > 0.0 {
+        Rgb([0, (q * 255.0) as u8, 0])
+    } else {
+        Rgb([(-q * 255.0) as u8, 0, 0])
+    };
+    for x in 0..img.width() {
+        img.put_pixel(x, 0, color);
+        img.put_pixel(x, img.height() - 1, color);
+    }
+    for y in 0..img.height() {
+        img.put_pixel(0, y, color);
+        img.put_pixel(img.width() - 1, y, color);
+    }
+}
