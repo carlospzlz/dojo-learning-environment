@@ -1,5 +1,8 @@
 use image::RgbImage;
 use rand::Rng;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Instant;
 
 use super::vision;
 
@@ -63,7 +66,10 @@ impl Agent {
         let current_index: usize;
         let current_action: u8;
         let max_q: f32;
-        if let Some(index) = self.search_state(&frame_abstraction) {
+        //if let Some(index) = self.search_state(&frame_abstraction) {
+        if let Some(index) =
+            parallel_linear_search(self.states.clone(), frame_abstraction.clone(), self.max_mse)
+        {
             // Existing state
             let current_state = &self.states[index];
             (current_action, max_q) = choose_best_action(current_state);
@@ -168,51 +174,45 @@ fn choose_best_action(state: &State) -> (u8, f32) {
     (rng.gen_range(0..=255), max_q)
 }
 
-//#[allow(dead_code)]
-//fn parallel_linear_search(data: Vec<State>, target: GrayImage) -> Option<usize> {
-//    let data = Arc::new(data);
-//    let result = Arc::new(Mutex::new(None));
-//    let target = Arc::new(target);
-//
-//    let chunk_size = data.len() / 8;
-//    let mut handles = vec![];
-//
-//    for i in 0..8 {
-//        let data_clone = Arc::clone(&data);
-//        let result_clone = Arc::clone(&result);
-//        let target_clone = Arc::clone(&target);
-//        let handle = thread::spawn(move || {
-//            let start = Instant::now();
-//            let mut local_result = None;
-//            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
-//            for (index, &ref state) in chunk.iter().enumerate() {
-//                if result_clone.lock().unwrap().is_some() {
-//                    return;
-//                }
-//                if vision::are_the_same(&state.frame, &target_clone) {
-//                    local_result = Some(i * chunk_size + index);
-//                    break;
-//                }
-//            }
-//            // Lock the mutex to update result
-//            let mut result = result_clone.lock().unwrap();
-//            if result.is_none() {
-//                *result = local_result;
-//            }
-//            let delta = Instant::now() - start;
-//            println!(
-//                "Thread {:?}: {} ms",
-//                thread::current().id(),
-//                delta.as_millis()
-//            );
-//        });
-//        handles.push(handle);
-//    }
-//
-//    for handle in handles {
-//        handle.join().unwrap();
-//    }
-//
-//    let result = result.lock().unwrap();
-//    *result
-//}
+fn parallel_linear_search(data: Vec<State>, target: RgbImage, max_mse: f32) -> Option<usize> {
+    if data.len() < 8 {
+        return None;
+    }
+    let data = Arc::new(data);
+    let result = Arc::new(Mutex::new(None::<(usize, f32)>));
+    let target = Arc::new(target);
+
+    let chunk_size = data.len() / 8;
+    let mut handles = vec![];
+
+    for i in 0..8 {
+        let data_clone = Arc::clone(&data);
+        let result_clone = Arc::clone(&result);
+        let target_clone = Arc::clone(&target);
+        let handle = thread::spawn(move || {
+            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
+            for (index, &ref state) in chunk.iter().enumerate() {
+                let mse = vision::get_mse(&state.frame_abstraction, &target_clone);
+                if mse < max_mse {
+                    // Lock the mutex to check/update result
+                    let mut result = result_clone.lock().unwrap();
+                    if result.is_none() || mse < result.unwrap().1 {
+                        *result = Some((i * chunk_size + index, mse));
+                    }
+                }
+            }
+        });
+        handles.push(handle);
+    }
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let result = result.lock().unwrap();
+    if let Some(local_result) = *result {
+        return Some(local_result.0);
+    }
+
+    None
+}

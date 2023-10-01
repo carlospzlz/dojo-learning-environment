@@ -131,10 +131,12 @@ impl MyApp {
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
             discount_factor: 0.9,
-            hist_threshold: 85,
+            //hist_threshold: 85,
+            hist_threshold: 40,
             blur: 1.0,
             median_filter: 3,
-            max_mse: 0.03,
+            //max_mse: 0.03,
+            max_mse: 0.02,
         }
     }
 }
