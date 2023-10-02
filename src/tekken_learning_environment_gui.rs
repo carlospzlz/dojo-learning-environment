@@ -48,9 +48,11 @@ enum Character {
     Eddy,
     Jin,
     King,
+    Law,
     Lei,
     Paul,
     Yoshimitsu,
+    Xiaoyu,
     Random,
 }
 
@@ -321,8 +323,10 @@ impl MyApp {
                             ui.selectable_value(&mut self.character1, Character::Eddy, "Eddy");
                             ui.selectable_value(&mut self.character1, Character::Jin, "Jin");
                             ui.selectable_value(&mut self.character1, Character::King, "King");
+                            ui.selectable_value(&mut self.character1, Character::Law, "Law");
                             ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
                             ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
+                            ui.selectable_value(&mut self.character1, Character::Xiaoyu, "Xiaoyu");
                             ui.selectable_value(&mut self.character1, Character::Random, "Random");
                             ui.selectable_value(
                                 &mut self.character1,
@@ -338,8 +342,10 @@ impl MyApp {
                             ui.selectable_value(&mut self.character2, Character::Eddy, "Eddy");
                             ui.selectable_value(&mut self.character2, Character::Jin, "Jin");
                             ui.selectable_value(&mut self.character2, Character::King, "King");
+                            ui.selectable_value(&mut self.character2, Character::Law, "Law");
                             ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
                             ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
+                            ui.selectable_value(&mut self.character2, Character::Xiaoyu, "Xiaoyu");
                             ui.selectable_value(&mut self.character2, Character::Random, "Random");
                             ui.selectable_value(
                                 &mut self.character2,
