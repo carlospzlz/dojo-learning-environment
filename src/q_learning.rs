@@ -17,6 +17,12 @@ pub struct Agent {
     blur: f32,
     median_filter: u32,
     max_mse: f32,
+    min_red: u8,
+    min_green: u8,
+    min_blue: u8,
+    low_red: u8,
+    low_green: u8,
+    low_blue: u8,
 }
 
 #[derive(Clone)]
@@ -48,6 +54,12 @@ impl Agent {
             blur: 1.0,
             median_filter: 3,
             max_mse: 0.03,
+            min_red: 0,
+            min_green: 0,
+            min_blue: 0,
+            low_red: 0,
+            low_green: 0,
+            low_blue: 0,
         }
     }
 
@@ -59,7 +71,19 @@ impl Agent {
             self.hist_threshold,
             self.blur,
             self.median_filter,
+            self.min_red,
+            self.min_green,
+            self.min_blue,
+            self.low_red,
+            self.low_green,
+            self.low_blue,
         );
+
+        if frame_abstraction.is_none() {
+            return 0;
+        }
+
+        let frame_abstraction = frame_abstraction.unwrap();
 
         // Search or Add
         let current_index: usize;
@@ -154,6 +178,30 @@ impl Agent {
 
     pub fn set_max_mse(&mut self, val: f32) {
         self.max_mse = val;
+    }
+
+    pub fn set_min_red(&mut self, val: u8) {
+        self.min_red = val;
+    }
+
+    pub fn set_min_green(&mut self, val: u8) {
+        self.min_green = val;
+    }
+
+    pub fn set_min_blue(&mut self, val: u8) {
+        self.min_blue = val;
+    }
+
+    pub fn set_low_red(&mut self, val: u8) {
+        self.low_red = val;
+    }
+
+    pub fn set_low_green(&mut self, val: u8) {
+        self.low_green = val;
+    }
+
+    pub fn set_low_blue(&mut self, val: u8) {
+        self.low_blue = val;
     }
 }
 

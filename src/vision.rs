@@ -1,6 +1,8 @@
 use image::imageops;
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
+use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
+use imageproc::morphology::dilate;
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -108,20 +110,38 @@ pub fn get_frame_abstraction(
     hist_threshold: u32,
     blur: f32,
     radius: u32,
-) -> RgbImage {
+    min_red: u8,
+    min_green: u8,
+    min_blue: u8,
+    low_red: u8,
+    low_green: u8,
+    low_blue: u8,
+) -> Option<RgbImage> {
     // Remove life bars
     let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
     let mut frame = frame.to_rgb8();
+    let mask = apply_thresholds(&frame, min_red, min_green, min_blue, low_red, low_green, low_blue);
+    let mask = DynamicImage::ImageRgb8(mask).to_luma8();
+    //let mask = dilate(&mask, Norm::L1, 16);
+    let mask = dilate(&mask, Norm::L1, 6);
+    // Discard bad abstractions
+    if get_detected_amount(&mask) < 0.1 {
+        println!("Discarded");
+        return None
+    }
+    apply_mask(&mut frame, &mask);
     // Drop pixels that are likely to be background
-    let histogram = get_histogram(&frame);
-    remove_more_frequent_than(&mut frame, &histogram, hist_threshold);
+    //let histogram = get_histogram(&frame);
+    //remove_more_frequent_than(&mut frame, &histogram, hist_threshold);
     // Extra processing: Blur and Median
-    let frame = imageops::blur(&frame, blur);
-    let frame = median_filter(&frame, radius, radius);
+    //let frame = imageops::blur(&frame, blur);
+    //let frame = median_filter(&frame, radius, radius);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(50, 50, image::imageops::FilterType::Nearest);
-    frame.to_rgb8()
+    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
+    //DynamicImage::ImageLuma8(frame).to_rgb8()
+    Some(frame.to_rgb8())
+    //frame
 }
 
 pub fn get_histogram(img: &RgbImage) -> Vec<Vec<Vec<u32>>> {
@@ -169,4 +189,54 @@ pub fn enclose_with_q(img: &mut RgbImage, q: f32) {
         img.put_pixel(0, y, color);
         img.put_pixel(img.width() - 1, y, color);
     }
+}
+
+pub fn apply_thresholds(img: &RgbImage, min_red: u8, min_green: u8, min_blue: u8, low_red: u8, low_green: u8, low_blue: u8) -> RgbImage {
+    // Remove life bars
+    //let img = DynamicImage::ImageRgb8(img.clone()).crop(0, 100, 368, 480);
+    //let img = img.to_rgb8();
+    let mut img_out = RgbImage::new(img.width(), img.height());
+    // Avoid some annoying white dots at the right of the frame
+    for x in 0..img.width() - 1 {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            let r = if pixel[0] > min_red || pixel[0] < low_red { pixel[0] } else { 0 };
+            let g = if pixel[1] > min_green || pixel[1] < low_green { pixel[1] } else { 0 };
+            let b = if pixel[2] > min_blue || pixel[2] < low_blue { pixel[2] } else { 0 };
+            img_out.put_pixel(x, y, Rgb([r, g, b]));
+        }
+    }
+    img_out
+}
+
+fn apply_mask(img: &mut RgbImage, mask: &GrayImage) {
+    if (img.width() != img.width()) || (mask.height() != mask.height()) {
+        panic!(
+            "Image dimensions differ: {}x{}, {}x{}",
+            img.width(),
+            img.height(),
+            mask.width(),
+            mask.height()
+        );
+    }
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            let multiplier = mask.get_pixel(x, y)[0] as f32 / 255.0;
+            let r = (pixel[0] as f32 * multiplier) as u8;
+            let g = (pixel[1] as f32 * multiplier) as u8;
+            let b = (pixel[2] as f32 * multiplier) as u8;
+            img.put_pixel(x, y, Rgb([r, g, b]));
+        }
+    }
+}
+
+fn get_detected_amount(img: &GrayImage) -> f32 {
+    let mut count = 0;
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            count += (img.get_pixel(x, y)[0] > 0) as u32;
+        }
+    }
+    count as f32 / (img.width() * img.height()) as f32
 }
