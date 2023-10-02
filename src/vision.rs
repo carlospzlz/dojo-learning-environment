@@ -83,17 +83,17 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
             img2.height()
         );
     }
-    let mut sum_squared_diff: i32 = 0;
+    let mut sum_squared_diff: i64 = 0;
     for x in 0..img1.width() {
         for y in 0..img1.height() {
             let pixel1 = img1.get_pixel(x, y);
             let pixel2 = img2.get_pixel(x, y);
-            let r1 = pixel1[0] as i32;
-            let g1 = pixel1[1] as i32;
-            let b1 = pixel1[2] as i32;
-            let r2 = pixel2[0] as i32;
-            let g2 = pixel2[1] as i32;
-            let b2 = pixel2[2] as i32;
+            let r1 = pixel1[0] as i64;
+            let g1 = pixel1[1] as i64;
+            let b1 = pixel1[2] as i64;
+            let r2 = pixel2[0] as i64;
+            let g2 = pixel2[1] as i64;
+            let b2 = pixel2[2] as i64;
             sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
         }
     }
