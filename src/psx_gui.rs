@@ -1,6 +1,6 @@
 use egui::{Color32, ColorImage, RichText, Vec2};
 use egui_file::FileDialog;
-use image::{Rgb, RgbImage};
+use image::{Rgb, RgbImage, DynamicImage};
 use log::error;
 use std::env;
 use std::fs::File;
@@ -146,6 +146,29 @@ impl eframe::App for MyApp {
                     let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
                     dialog.open();
                     self.save_file_dialog = Some(dialog);
+                }
+                if ui.button("Save Frame").clicked() {
+                    // Stop emu, to save the current state
+                    self.is_running = false;
+
+                    // Get frame buffer
+                    let (width, height) = self.system.get_display_size();
+                    let (width, height) = (width as usize, height as usize);
+                    let mut framebuffer = vec![0; width * height * 3].into_boxed_slice();
+                    self.system.get_framebuffer(&mut framebuffer, false);
+
+                    // Covert to RgbImage
+                    let mut img = RgbImage::new(width as u32, height as u32);
+                    for (x, y, pixel) in img.enumerate_pixels_mut() {
+                        let offset = ((y as u32 * width as u32 + x as u32) * 3) as usize;
+                        let r = framebuffer[offset];
+                        let g = framebuffer[offset + 1];
+                        let b = framebuffer[offset + 2];
+                        *pixel = Rgb([r, g, b]);
+                    }
+
+                    // Save to file
+                    let img = DynamicImage::ImageRgb8(img).save("frame.png");
                 }
                 let emu_controls_width = 350.0;
                 let space = available_width - emu_controls_width;

@@ -2,6 +2,7 @@ use image::RgbImage;
 use rand::Rng;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use image::io::Reader;
 
 use super::vision;
 
@@ -17,6 +18,7 @@ pub struct Agent {
     blur: f32,
     median_filter: u32,
     max_mse: f32,
+    character1_histogram: Option<Vec<Vec<Vec<u32>>>>,
 }
 
 #[derive(Clone)]
@@ -36,6 +38,8 @@ impl State {
 
 impl Agent {
     pub fn new() -> Self {
+        let img = Reader::open("characters/yoshimitsu.png").unwrap().decode().unwrap();
+        let img = img.to_rgb8();
         Self {
             states: Vec::<State>::new(),
             previous_index: None,
@@ -48,6 +52,7 @@ impl Agent {
             blur: 1.0,
             median_filter: 3,
             max_mse: 0.03,
+            character1_histogram: Some(vision::get_histogram(&img)),
         }
     }
 
@@ -56,6 +61,7 @@ impl Agent {
         // This is one of the most important/challenging parts
         let frame_abstraction = vision::get_frame_abstraction(
             &frame,
+            self.character1_histogram.clone().as_ref().unwrap(),
             self.hist_threshold,
             self.blur,
             self.median_filter,

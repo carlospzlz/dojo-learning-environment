@@ -105,6 +105,7 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
 
 pub fn get_frame_abstraction(
     frame: &RgbImage,
+    histogram: &Vec<Vec<Vec<u32>>>,
     hist_threshold: u32,
     blur: f32,
     radius: u32,
@@ -113,15 +114,17 @@ pub fn get_frame_abstraction(
     let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
     let mut frame = frame.to_rgb8();
     // Drop pixels that are likely to be background
-    let histogram = get_histogram(&frame);
-    remove_more_frequent_than(&mut frame, &histogram, hist_threshold);
+    //let histogram = get_histogram(&frame);
+    //remove_more_frequent_than(&mut frame, &histogram, hist_threshold);
+    keep_more_frequent_than(&mut frame, &histogram, hist_threshold);
     // Extra processing: Blur and Median
     let frame = imageops::blur(&frame, blur);
     let frame = median_filter(&frame, radius, radius);
     //Down-size, so compute time doesn't explode
-    let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(50, 50, image::imageops::FilterType::Nearest);
-    frame.to_rgb8()
+    //let frame = DynamicImage::ImageRgb8(frame);
+    //let frame = frame.resize_exact(50, 50, image::imageops::FilterType::Nearest);
+    //frame.to_rgb8()
+    frame
 }
 
 pub fn get_histogram(img: &RgbImage) -> Vec<Vec<Vec<u32>>> {
@@ -146,6 +149,20 @@ pub fn remove_more_frequent_than(img: &mut RgbImage, histogram: &Vec<Vec<Vec<u32
             let g = pixel[1];
             let b = pixel[2];
             if histogram[r as usize][g as usize][b as usize] > max {
+                img.put_pixel(x, y, Rgb([0, 0, 0]));
+            }
+        }
+    }
+}
+
+pub fn keep_more_frequent_than(img: &mut RgbImage, histogram: &Vec<Vec<Vec<u32>>>, max: u32) {
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            let r = pixel[0];
+            let g = pixel[1];
+            let b = pixel[2];
+            if histogram[r as usize][g as usize][b as usize] < max {
                 img.put_pixel(x, y, Rgb([0, 0, 0]));
             }
         }

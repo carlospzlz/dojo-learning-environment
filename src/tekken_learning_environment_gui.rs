@@ -379,7 +379,7 @@ impl MyApp {
                 });
                 egui::Grid::new("vision_pipeline").show(ui, |ui| {
                     ui.label("Hist");
-                    ui.add(egui::Slider::new(&mut self.hist_threshold, 0..=170));
+                    ui.add(egui::Slider::new(&mut self.hist_threshold, 0..=300));
                     ui.end_row();
                     ui.label("Blur");
                     ui.add(egui::Slider::new(&mut self.blur, 0.0..=2.0));
@@ -451,6 +451,8 @@ impl MyApp {
         // TODO: Set bios and game
         self.system = bincode::deserialize(&bytes).unwrap();
         self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
+        // Notify agent
+        //self.agent.load_character1_histogram();
     }
 
     fn right_panel(&mut self, ctx: &egui::Context) {
