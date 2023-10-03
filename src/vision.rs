@@ -97,10 +97,9 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
             sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
         }
     }
-    let total_pixels = (img1.width() * img1.height()) as f32;
-    let mse = sum_squared_diff as f32 / total_pixels;
-    // Normalize (max MSE is 255^2)
-    let mse = mse / (1 << 16) as f32;
+    let total_pixels = img1.width() * img1.height();
+    let max_sum_squared_diff = total_pixels * 255_u32.pow(2) * 3;
+    let mse = sum_squared_diff as f32 / max_sum_squared_diff as f32;
     mse
 }
 
