@@ -2,7 +2,6 @@ use image::RgbImage;
 use rand::Rng;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
 
 use super::vision;
 
@@ -105,6 +104,7 @@ impl Agent {
         current_action
     }
 
+    #[allow(dead_code)]
     fn search_state(&self, target: &RgbImage) -> Option<usize> {
         let mut min_mse: f32 = (1 << 16) as f32;
         let mut best_index = 0;
