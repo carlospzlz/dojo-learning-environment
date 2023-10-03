@@ -61,7 +61,7 @@ enum Vision {
     PSX,
     Life,
     Agent,
-    Manual,
+    Contrast,
 }
 
 struct FrameTime {
@@ -104,16 +104,11 @@ struct MyApp {
     frame_time: FrameTime,
     learning_rate: f32,
     discount_factor: f32,
-    hist_threshold: u32,
-    blur: f32,
-    median_filter: u32,
+    red_thresholds: [u8; 2],
+    green_thresholds: [u8; 2],
+    blue_thresholds: [u8; 2],
+    dilate_k: u8,
     max_mse: f32,
-    min_red: u8,
-    min_green: u8,
-    min_blue: u8,
-    low_red: u8,
-    low_green: u8,
-    low_blue: u8,
 }
 
 impl MyApp {
@@ -140,18 +135,11 @@ impl MyApp {
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
             discount_factor: 0.9,
-            //hist_threshold: 85,
-            hist_threshold: 40,
-            blur: 2.0,
-            median_filter: 3,
-            //max_mse: 0.03,
+            red_thresholds: [0, 173],
+            green_thresholds: [15, 165],
+            blue_thresholds: [15, 156],
+            dilate_k: 6,
             max_mse: 0.012,
-            min_red: 173,
-            min_green: 165,
-            min_blue: 156,
-            low_red: 0,
-            low_green: 15,
-            low_blue: 15,
         }
     }
 }
@@ -206,9 +194,13 @@ impl MyApp {
             match self.vision {
                 Vision::Agent => img = self.agent.get_last_state_abstraction(),
                 Vision::Life => img = vision::visualize_life_bars(img),
-                Vision::Manual => {
-                    img =
-                        vision::apply_thresholds(&img, self.min_red, self.min_green, self.min_blue, self.low_red, self.low_green, self.low_blue);
+                Vision::Contrast => {
+                    img = vision::apply_thresholds(
+                        &img,
+                        self.red_thresholds,
+                        self.green_thresholds,
+                        self.blue_thresholds,
+                    );
                 }
                 Vision::PSX => (),
             }
@@ -381,7 +373,7 @@ impl MyApp {
                             ui.selectable_value(&mut self.vision, Vision::PSX, "PSX");
                             ui.selectable_value(&mut self.vision, Vision::Life, "Life");
                             ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
-                            ui.selectable_value(&mut self.vision, Vision::Manual, "Manual");
+                            ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
                         });
                     ui.end_row();
                     ui.label("Split View");
@@ -396,36 +388,29 @@ impl MyApp {
                     ui.add(separator.horizontal());
                 });
                 egui::Grid::new("vision_pipeline").show(ui, |ui| {
-                    ui.label("Hist");
-                    ui.add(egui::Slider::new(&mut self.hist_threshold, 0..=170));
+                    ui.label("Red");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
+                        ui.add(egui::DragValue::new(&mut self.red_thresholds[1]));
+                    });
                     ui.end_row();
-                    ui.label("Blur");
-                    ui.add(egui::Slider::new(&mut self.blur, 0.0..=10.0));
+                    ui.label("Green");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.green_thresholds[0]));
+                        ui.add(egui::DragValue::new(&mut self.green_thresholds[1]));
+                    });
                     ui.end_row();
-                    ui.label("Median");
-                    ui.add(egui::Slider::new(&mut self.median_filter, 0..=6));
+                    ui.label("Blue");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.blue_thresholds[0]));
+                        ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
+                    });
+                    ui.end_row();
+                    ui.label("Dilate");
+                    ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
                     ui.end_row();
                     ui.label("MSE");
                     ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
-                    ui.end_row();
-                    ui.label("Min Red");
-                    ui.add(egui::Slider::new(&mut self.min_red, 0..=255));
-                    ui.end_row();
-                    ui.label("Min Green");
-                    ui.add(egui::Slider::new(&mut self.min_green, 0..=255));
-                    ui.end_row();
-                    ui.label("Min Blue");
-                    ui.add(egui::Slider::new(&mut self.min_blue, 0..=255));
-                    ui.end_row();
-                    ui.label("Low Red");
-                    ui.add(egui::Slider::new(&mut self.low_red, 0..=255));
-                    ui.end_row();
-                    ui.label("Low Green");
-                    ui.add(egui::Slider::new(&mut self.low_green, 0..=255));
-                    ui.end_row();
-                    ui.label("Low Blue");
-                    ui.add(egui::Slider::new(&mut self.low_blue, 0..=255));
-
                 });
                 ui.horizontal(|_ui| {});
 
@@ -554,6 +539,11 @@ impl MyApp {
                     let number_of_revisited_states =
                         format!("{}", self.agent.get_number_of_revisited_states());
                     ui.label(number_of_revisited_states);
+                    ui.end_row();
+                    ui.label("Previous Next States:");
+                    let previous_next_states =
+                        format!("{}", self.agent.get_number_of_previous_next_states());
+                    ui.label(previous_next_states);
                 });
             });
     }
@@ -588,16 +578,11 @@ impl MyApp {
         self.time_from_last_observation += self.frame_time.total_time;
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
         if self.time_from_last_observation > period {
-            self.agent.set_hist_threshold(self.hist_threshold);
-            self.agent.set_blur(self.blur);
-            self.agent.set_median_filter(self.median_filter);
+            self.agent.set_red_thresholds(self.red_thresholds);
+            self.agent.set_green_thresholds(self.green_thresholds);
+            self.agent.set_blue_thresholds(self.blue_thresholds);
+            self.agent.set_dilate_k(self.dilate_k);
             self.agent.set_max_mse(self.max_mse);
-            self.agent.set_min_red(self.min_red);
-            self.agent.set_min_green(self.min_green);
-            self.agent.set_min_blue(self.min_blue);
-            self.agent.set_low_red(self.low_red);
-            self.agent.set_low_green(self.low_green);
-            self.agent.set_low_blue(self.low_blue);
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
             let action = self.agent.visit_state(self.frame.clone(), reward);

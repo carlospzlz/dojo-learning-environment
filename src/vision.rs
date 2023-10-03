@@ -107,41 +107,27 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
 
 pub fn get_frame_abstraction(
     frame: &RgbImage,
-    hist_threshold: u32,
-    blur: f32,
-    radius: u32,
-    min_red: u8,
-    min_green: u8,
-    min_blue: u8,
-    low_red: u8,
-    low_green: u8,
-    low_blue: u8,
+    red_thresholds: [u8; 2],
+    green_thresholds: [u8; 2],
+    blue_thresholds: [u8; 2],
+    dilate_k: u8,
 ) -> Option<RgbImage> {
     // Remove life bars
     let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
     let mut frame = frame.to_rgb8();
-    let mask = apply_thresholds(&frame, min_red, min_green, min_blue, low_red, low_green, low_blue);
+    let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
     let mask = DynamicImage::ImageRgb8(mask).to_luma8();
-    //let mask = dilate(&mask, Norm::L1, 16);
-    let mask = dilate(&mask, Norm::L1, 6);
-    // Discard bad abstractions
-    if get_detected_amount(&mask) < 0.1 {
+    let mask = dilate(&mask, Norm::L1, dilate_k);
+    // Discard bad abstractions ?
+    if get_detected_amount(&mask) < 0.02 {
         println!("Discarded");
-        return None
+        return None;
     }
     apply_mask(&mut frame, &mask);
-    // Drop pixels that are likely to be background
-    //let histogram = get_histogram(&frame);
-    //remove_more_frequent_than(&mut frame, &histogram, hist_threshold);
-    // Extra processing: Blur and Median
-    //let frame = imageops::blur(&frame, blur);
-    //let frame = median_filter(&frame, radius, radius);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageRgb8(frame);
     let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    //DynamicImage::ImageLuma8(frame).to_rgb8()
     Some(frame.to_rgb8())
-    //frame
 }
 
 pub fn get_histogram(img: &RgbImage) -> Vec<Vec<Vec<u32>>> {
@@ -191,7 +177,12 @@ pub fn enclose_with_q(img: &mut RgbImage, q: f32) {
     }
 }
 
-pub fn apply_thresholds(img: &RgbImage, min_red: u8, min_green: u8, min_blue: u8, low_red: u8, low_green: u8, low_blue: u8) -> RgbImage {
+pub fn apply_thresholds(
+    img: &RgbImage,
+    red_thresholds: [u8; 2],
+    green_thresholds: [u8; 2],
+    blue_thresholds: [u8; 2],
+) -> RgbImage {
     // Remove life bars
     //let img = DynamicImage::ImageRgb8(img.clone()).crop(0, 100, 368, 480);
     //let img = img.to_rgb8();
@@ -200,9 +191,21 @@ pub fn apply_thresholds(img: &RgbImage, min_red: u8, min_green: u8, min_blue: u8
     for x in 0..img.width() - 1 {
         for y in 0..img.height() {
             let pixel = img.get_pixel(x, y);
-            let r = if pixel[0] > min_red || pixel[0] < low_red { pixel[0] } else { 0 };
-            let g = if pixel[1] > min_green || pixel[1] < low_green { pixel[1] } else { 0 };
-            let b = if pixel[2] > min_blue || pixel[2] < low_blue { pixel[2] } else { 0 };
+            let r = if pixel[0] < red_thresholds[0] || pixel[0] > red_thresholds[1] {
+                pixel[0]
+            } else {
+                0
+            };
+            let g = if pixel[1] < green_thresholds[0] || pixel[1] > green_thresholds[1] {
+                pixel[1]
+            } else {
+                0
+            };
+            let b = if pixel[2] < blue_thresholds[0] || pixel[2] > blue_thresholds[1] {
+                pixel[2]
+            } else {
+                0
+            };
             img_out.put_pixel(x, y, Rgb([r, g, b]));
         }
     }
