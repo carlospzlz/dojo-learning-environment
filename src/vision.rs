@@ -86,6 +86,7 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
         );
     }
     let mut sum_squared_diff: i64 = 0;
+    let mut count = 0;
     for x in 0..img1.width() {
         for y in 0..img1.height() {
             let pixel1 = img1.get_pixel(x, y);
@@ -96,11 +97,14 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
             let r2 = pixel2[0] as i64;
             let g2 = pixel2[1] as i64;
             let b2 = pixel2[2] as i64;
-            sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
+            if (r1, g1, b1) != (0, 0, 0) || (r2, g2, b2) != (0, 0, 0) {
+                sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
+                count += 1;
+            }
         }
     }
-    let total_pixels = img1.width() * img1.height();
-    let max_sum_squared_diff = total_pixels * 255_u32.pow(2) * 3;
+    //let total_pixels = img1.width() * img1.height();
+    let max_sum_squared_diff = count * 255_u32.pow(2) * 3;
     let mse = sum_squared_diff as f32 / max_sum_squared_diff as f32;
     mse
 }
@@ -242,4 +246,51 @@ fn get_detected_amount(img: &GrayImage) -> f32 {
         }
     }
     count as f32 / (img.width() * img.height()) as f32
+}
+
+pub fn get_centroid(img: &RgbImage, x_range: [u32; 2]) -> [u32; 2] {
+    let mut max_x = 0;
+    let mut x_index = 0;
+    let mut y_count = vec![0; img.height() as usize];
+    for x in x_range[0]..x_range[1] {
+        let mut x_count = 0;
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+                x_count += 1;
+                y_count[y as usize] += 1;
+            }
+        }
+        if x_count > max_x {
+            max_x = x_count;
+            x_index = x;
+        }
+    }
+    let mut y_index = 0;
+    let mut max_y = 0;
+    for i in 0..y_count.len() {
+        if y_count[i] > max_y {
+            max_y = y_count[i];
+            y_index = i;
+        }
+    }
+    [x_index, y_index as u32]
+}
+
+pub fn decorate_frame(img: &mut RgbImage, centroid1: [u32; 2], centroid2: [u32; 2]) {
+    let color = Rgb([0, 128, 0]);
+    let color1 = Rgb([128, 0, 0]);
+    let color2 = Rgb([0, 0, 128]);
+    for x in 0..img.width() {
+        img.put_pixel(x, 0, color);
+        img.put_pixel(x, centroid1[1], color1);
+        img.put_pixel(x, centroid2[1], color2);
+        img.put_pixel(x, img.height() - 1, color);
+    }
+    for y in 0..img.height() {
+        img.put_pixel(0, y, color);
+        img.put_pixel(centroid1[0], y, color1);
+        img.put_pixel(centroid2[0], y, color2);
+        img.put_pixel(img.width() - 1, y, color);
+    }
 }

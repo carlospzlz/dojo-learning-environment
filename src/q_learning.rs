@@ -24,14 +24,18 @@ pub struct Agent {
 #[derive(Clone)]
 struct State {
     frame_abstraction: RgbImage,
+    char1_centroid: [u32; 2],
+    char2_centroid: [u32; 2],
     q: [f32; 256],
     next_states: HashSet<usize>,
 }
 
 impl State {
-    fn new(frame_abstraction: RgbImage) -> Self {
+    fn new(frame_abstraction: RgbImage, char1_centroid: [u32; 2], char2_centroid: [u32; 2]) -> Self {
         Self {
             frame_abstraction,
+            char1_centroid,
+            char2_centroid,
             q: [0.0; 256],
             next_states: HashSet::default(),
         }
@@ -66,12 +70,17 @@ impl Agent {
             self.blue_thresholds,
             self.dilate_k,
         );
-
         if frame_abstraction.is_none() {
             return 0;
         }
 
         let frame_abstraction = frame_abstraction.unwrap();
+
+        // Compute characters centroids
+        let width = frame_abstraction.width();
+        let half_width = (frame_abstraction.width() as f32 / 2.0) as u32;
+        let char1_centroid = vision::get_centroid(&frame_abstraction, [0, half_width]);
+        let char2_centroid = vision::get_centroid(&frame_abstraction, [half_width, width]);
 
         // Search or Add
         let current_index: usize;
@@ -97,7 +106,7 @@ impl Agent {
         } else {
             // New state
             current_index = self.states.len();
-            self.states.push(State::new(frame_abstraction));
+            self.states.push(State::new(frame_abstraction, char1_centroid, char2_centroid));
             let mut rng = rand::thread_rng();
             current_action = rng.gen_range(0..=255);
             max_q = 0.0;
@@ -171,9 +180,18 @@ impl Agent {
     }
 
     pub fn get_last_state_abstraction(&self) -> RgbImage {
-        if let (Some(index), Some(q)) = (self.previous_index, self.previous_q) {
+        //if let (Some(index), Some(q)) = (self.previous_index, self.previous_q) {
+        //    let mut frame = self.states[index].frame_abstraction.clone();
+        //    vision::enclose_with_q(&mut frame, q);
+        //    return frame;
+        //}
+        if let Some(index) = self.previous_index {
             let mut frame = self.states[index].frame_abstraction.clone();
-            vision::enclose_with_q(&mut frame, q);
+            //if index < self.states.len() - 1 {
+                let char1_centroid = self.states[index].char1_centroid;
+                let char2_centroid = self.states[index].char2_centroid;
+                vision::decorate_frame(&mut frame, char1_centroid, char2_centroid);
+            //}
             return frame;
         }
         RgbImage::default()
