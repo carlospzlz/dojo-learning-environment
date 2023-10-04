@@ -3,6 +3,7 @@ use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::filter::median_filter;
 use imageproc::morphology::dilate;
+use std::cmp;
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -109,6 +110,45 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
     mse
 }
 
+pub fn get_mse_in_roi(
+    img1: &RgbImage,
+    img2: &RgbImage,
+    roi1: ([u32; 2], [u32; 2]),
+    roi2: ([u32; 2], [u32; 2]),
+) -> f32 {
+    let width1 = roi1.0[1] - roi1.0[0];
+    let width2 = roi2.0[1] - roi2.0[0];
+    let height1 = roi1.1[1] - roi1.1[0];
+    let height2 = roi2.1[1] - roi2.1[0];
+    if width1 != width2 || height1 != height2 {
+        panic!(
+            "ROI dimensions differ: {}x{}, {}x{}",
+            width1, height1, width2, height2
+        )
+    }
+    let mut sum_squared_diff: i64 = 0;
+    let mut count = 0;
+    for x in 0..width1 {
+        for y in 0..height1 {
+            let pixel1 = img1.get_pixel(roi1.0[0] + x, roi1.1[0] + y);
+            let pixel2 = img2.get_pixel(roi2.0[0] + x, roi2.1[0] + y);
+            let r1 = pixel1[0] as i64;
+            let g1 = pixel1[1] as i64;
+            let b1 = pixel1[2] as i64;
+            let r2 = pixel2[0] as i64;
+            let g2 = pixel2[1] as i64;
+            let b2 = pixel2[2] as i64;
+            if (r1, g1, b1) != (0, 0, 0) || (r2, g2, b2) != (0, 0, 0) {
+                sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
+                count += 1;
+            }
+        }
+    }
+    let max_sum_squared_diff = count * 255_u32.pow(2) * 3;
+    let mse = sum_squared_diff as f32 / max_sum_squared_diff as f32;
+    mse
+}
+
 pub fn get_frame_abstraction(
     frame: &RgbImage,
     red_thresholds: [u8; 2],
@@ -130,7 +170,7 @@ pub fn get_frame_abstraction(
     apply_mask(&mut frame, &mask);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
+    let frame = frame.resize_exact(100,100, image::imageops::FilterType::Lanczos3);
     Some(frame.to_rgb8())
 }
 
@@ -292,5 +332,74 @@ pub fn decorate_frame(img: &mut RgbImage, centroid1: [u32; 2], centroid2: [u32; 
         img.put_pixel(centroid1[0], y, color1);
         img.put_pixel(centroid2[0], y, color2);
         img.put_pixel(img.width() - 1, y, color);
+    }
+}
+
+pub fn add_sections(img: &mut RgbImage, middle: u32) {
+    let color = Rgb([0, 128, 0]);
+    //let number_of_sections = 2;
+    //let section_width = (img.width() as f32 / number_of_sections as f32) as u32;
+    //for x in 0..=number_of_sections {
+    //    let x = cmp::min(x * section_width, img.width() - 1);
+    //    for y in 0..img.height() {
+    //        img.put_pixel(x, y, color);
+    //    }
+    //}
+    for x in 0..img.width() {
+        img.put_pixel(x, 0, color);
+        img.put_pixel(x, (img.height() as f32 / 3.0) as u32, color);
+        img.put_pixel(x, (2.0 * img.height() as f32 / 3.0) as u32, color);
+        img.put_pixel(x, img.height() - 1, color);
+    }
+    for y in 0..img.height() {
+        img.put_pixel(0, y, color);
+        img.put_pixel((img.width() as f32 / 2.0) as u32, y, color);
+        img.put_pixel(img.width() - 1, y, color);
+    }
+}
+
+pub fn get_blob_limits(img: &RgbImage) -> ([u32; 2], [u32; 2]) {
+    let mut min_x = img.width();
+    let mut max_x = 0;
+    let mut min_y = img.height();
+    let mut max_y = 0;
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+                min_x = cmp::min(x, min_x);
+                max_x = cmp::max(x, max_x);
+                min_y = cmp::min(y, min_y);
+                max_y = cmp::max(y, max_y);
+            }
+        }
+    }
+    ([min_x, max_x], [0, img.height()])
+}
+
+pub fn enclose_blobs(img: &mut RgbImage) {
+    let mut min_x = img.width();
+    let mut max_x = 0;
+    let mut min_y = img.height();
+    let mut max_y = 0;
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+                min_x = cmp::min(x, min_x);
+                max_x = cmp::max(x, max_x);
+                min_y = cmp::min(y, min_y);
+                max_y = cmp::max(y, max_y);
+            }
+        }
+    }
+    let color = Rgb([0, 128, 0]);
+    for x in min_x..=max_x {
+        img.put_pixel(x, min_y, color);
+        img.put_pixel(x, max_y, color);
+    }
+    for y in min_y..=max_y {
+        img.put_pixel(min_x, y, color);
+        img.put_pixel(max_x, y, color);
     }
 }
