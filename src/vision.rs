@@ -1,7 +1,5 @@
-use image::imageops;
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
-use imageproc::filter::median_filter;
 use imageproc::morphology::dilate;
 use std::cmp;
 
@@ -110,28 +108,26 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
     mse
 }
 
-pub fn get_mse_in_roi(
+pub fn get_mse_in_x_limits(
     img1: &RgbImage,
     img2: &RgbImage,
-    roi1: ([u32; 2], [u32; 2]),
-    roi2: ([u32; 2], [u32; 2]),
+    x_limits1: (u32, u32),
+    x_limits2: (u32, u32),
 ) -> f32 {
-    let width1 = roi1.0[1] - roi1.0[0];
-    let width2 = roi2.0[1] - roi2.0[0];
-    let height1 = roi1.1[1] - roi1.1[0];
-    let height2 = roi2.1[1] - roi2.1[0];
-    if width1 != width2 || height1 != height2 {
+    let width1 = x_limits1.1 - x_limits1.0;
+    let width2 = x_limits2.1 - x_limits2.0;
+    if width1 != width2 {
         panic!(
-            "ROI dimensions differ: {}x{}, {}x{}",
-            width1, height1, width2, height2
+            "X limits differ: {}-{}, {}-{}",
+            x_limits1.0, x_limits1.1, x_limits2.0, x_limits2.1
         )
     }
     let mut sum_squared_diff: i64 = 0;
     let mut count = 0;
     for x in 0..width1 {
-        for y in 0..height1 {
-            let pixel1 = img1.get_pixel(roi1.0[0] + x, roi1.1[0] + y);
-            let pixel2 = img2.get_pixel(roi2.0[0] + x, roi2.1[0] + y);
+        for y in 0..img1.height() {
+            let pixel1 = img1.get_pixel(x_limits1.0 + x, y);
+            let pixel2 = img2.get_pixel(x_limits2.0 + x, y);
             let r1 = pixel1[0] as i64;
             let g1 = pixel1[1] as i64;
             let b1 = pixel1[2] as i64;
@@ -162,7 +158,7 @@ pub fn get_frame_abstraction(
     let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
     let mask = DynamicImage::ImageRgb8(mask).to_luma8();
     let mask = dilate(&mask, Norm::L1, dilate_k);
-    // Discard bad abstractions ?
+    // Discard bad abstractions
     if get_detected_amount(&mask) < 0.02 {
         println!("Discarded");
         return None;
@@ -170,10 +166,11 @@ pub fn get_frame_abstraction(
     apply_mask(&mut frame, &mask);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(100,100, image::imageops::FilterType::Lanczos3);
+    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
     Some(frame.to_rgb8())
 }
 
+#[allow(dead_code)]
 pub fn get_histogram(img: &RgbImage) -> Vec<Vec<Vec<u32>>> {
     let mut histogram = vec![vec![vec![0; 256]; 256]; 256];
     for x in 0..img.width() {
@@ -188,20 +185,7 @@ pub fn get_histogram(img: &RgbImage) -> Vec<Vec<Vec<u32>>> {
     histogram
 }
 
-pub fn remove_more_frequent_than(img: &mut RgbImage, histogram: &Vec<Vec<Vec<u32>>>, max: u32) {
-    for x in 0..img.width() {
-        for y in 0..img.height() {
-            let pixel = img.get_pixel(x, y);
-            let r = pixel[0];
-            let g = pixel[1];
-            let b = pixel[2];
-            if histogram[r as usize][g as usize][b as usize] > max {
-                img.put_pixel(x, y, Rgb([0, 0, 0]));
-            }
-        }
-    }
-}
-
+#[allow(dead_code)]
 pub fn enclose_with_q(img: &mut RgbImage, q: f32) {
     if q == 0.0 {
         return;
@@ -288,118 +272,38 @@ fn get_detected_amount(img: &GrayImage) -> f32 {
     count as f32 / (img.width() * img.height()) as f32
 }
 
-pub fn get_centroid(img: &RgbImage, x_range: [u32; 2]) -> [u32; 2] {
-    let mut max_x = 0;
-    let mut x_index = 0;
-    let mut y_count = vec![0; img.height() as usize];
-    for x in x_range[0]..x_range[1] {
-        let mut x_count = 0;
-        for y in 0..img.height() {
-            let pixel = img.get_pixel(x, y);
-            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
-                x_count += 1;
-                y_count[y as usize] += 1;
-            }
-        }
-        if x_count > max_x {
-            max_x = x_count;
-            x_index = x;
-        }
-    }
-    let mut y_index = 0;
-    let mut max_y = 0;
-    for i in 0..y_count.len() {
-        if y_count[i] > max_y {
-            max_y = y_count[i];
-            y_index = i;
-        }
-    }
-    [x_index, y_index as u32]
-}
-
-pub fn decorate_frame(img: &mut RgbImage, centroid1: [u32; 2], centroid2: [u32; 2]) {
-    let color = Rgb([0, 128, 0]);
-    let color1 = Rgb([128, 0, 0]);
-    let color2 = Rgb([0, 0, 128]);
-    for x in 0..img.width() {
-        img.put_pixel(x, 0, color);
-        img.put_pixel(x, centroid1[1], color1);
-        img.put_pixel(x, centroid2[1], color2);
-        img.put_pixel(x, img.height() - 1, color);
-    }
-    for y in 0..img.height() {
-        img.put_pixel(0, y, color);
-        img.put_pixel(centroid1[0], y, color1);
-        img.put_pixel(centroid2[0], y, color2);
-        img.put_pixel(img.width() - 1, y, color);
-    }
-}
-
-pub fn add_sections(img: &mut RgbImage, middle: u32) {
-    let color = Rgb([0, 128, 0]);
-    //let number_of_sections = 2;
-    //let section_width = (img.width() as f32 / number_of_sections as f32) as u32;
-    //for x in 0..=number_of_sections {
-    //    let x = cmp::min(x * section_width, img.width() - 1);
-    //    for y in 0..img.height() {
-    //        img.put_pixel(x, y, color);
-    //    }
-    //}
-    for x in 0..img.width() {
-        img.put_pixel(x, 0, color);
-        img.put_pixel(x, (img.height() as f32 / 3.0) as u32, color);
-        img.put_pixel(x, (2.0 * img.height() as f32 / 3.0) as u32, color);
-        img.put_pixel(x, img.height() - 1, color);
-    }
-    for y in 0..img.height() {
-        img.put_pixel(0, y, color);
-        img.put_pixel((img.width() as f32 / 2.0) as u32, y, color);
-        img.put_pixel(img.width() - 1, y, color);
-    }
-}
-
-pub fn get_blob_limits(img: &RgbImage) -> ([u32; 2], [u32; 2]) {
+#[allow(dead_code)]
+pub fn get_x_limits(img: &RgbImage) -> (u32, u32) {
     let mut min_x = img.width();
     let mut max_x = 0;
-    let mut min_y = img.height();
-    let mut max_y = 0;
     for x in 0..img.width() {
         for y in 0..img.height() {
             let pixel = img.get_pixel(x, y);
             if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
                 min_x = cmp::min(x, min_x);
                 max_x = cmp::max(x, max_x);
-                min_y = cmp::min(y, min_y);
-                max_y = cmp::max(y, max_y);
             }
         }
     }
-    ([min_x, max_x], [0, img.height()])
+    (min_x, max_x)
 }
 
-pub fn enclose_blobs(img: &mut RgbImage) {
-    let mut min_x = img.width();
-    let mut max_x = 0;
-    let mut min_y = img.height();
-    let mut max_y = 0;
-    for x in 0..img.width() {
-        for y in 0..img.height() {
-            let pixel = img.get_pixel(x, y);
-            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
-                min_x = cmp::min(x, min_x);
-                max_x = cmp::max(x, max_x);
-                min_y = cmp::min(y, min_y);
-                max_y = cmp::max(y, max_y);
-            }
-        }
-    }
+pub fn draw_x_limits(img: &mut RgbImage, x_limits: (u32, u32)) {
     let color = Rgb([0, 128, 0]);
-    for x in min_x..=max_x {
-        img.put_pixel(x, min_y, color);
-        img.put_pixel(x, max_y, color);
+    for y in 0..img.height() {
+        img.put_pixel(x_limits.0, y, color);
+        img.put_pixel(x_limits.1, y, color);
     }
-    for y in min_y..=max_y {
-        img.put_pixel(min_x, y, color);
-        img.put_pixel(max_x, y, color);
+}
+
+pub fn draw_border(img: &mut RgbImage) {
+    let color = Rgb([128, 0, 128]);
+    for x in 0..img.width() {
+        img.put_pixel(x, 0, color);
+        img.put_pixel(x, img.height() - 1, color);
+    }
+    for y in 0..img.height() {
+        img.put_pixel(0, y, color);
+        img.put_pixel(img.width() - 1, y, color);
     }
 }

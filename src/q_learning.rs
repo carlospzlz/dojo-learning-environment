@@ -1,6 +1,7 @@
 use image::RgbImage;
+use log::warn;
 use rand::Rng;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -8,6 +9,7 @@ use super::vision;
 
 pub struct Agent {
     states: Vec<State>,
+    states_index: HashMap<(u32, u32), Vec<usize>>,
     previous_index: Option<usize>,
     previous_action: Option<u8>,
     previous_q: Option<f32>,
@@ -24,27 +26,18 @@ pub struct Agent {
 #[derive(Clone)]
 struct State {
     frame_abstraction: RgbImage,
-    char1_centroid: [u32; 2],
-    char2_centroid: [u32; 2],
-    blob_limits: ([u32; 2], [u32; 2]),
+    x_limits: (u32, u32),
     q: [f32; 256],
-    next_states: HashSet<usize>,
+    next_states: HashMap<(u32, u32), Vec<usize>>,
 }
 
 impl State {
-    fn new(
-        frame_abstraction: RgbImage,
-        char1_centroid: [u32; 2],
-        char2_centroid: [u32; 2],
-        blob_limits: ([u32; 2], [u32; 2]),
-    ) -> Self {
+    fn new(frame_abstraction: RgbImage, x_limits: (u32, u32)) -> Self {
         Self {
             frame_abstraction,
-            char1_centroid,
-            char2_centroid,
-            blob_limits,
+            x_limits,
             q: [0.0; 256],
-            next_states: HashSet::default(),
+            next_states: HashMap::<(u32, u32), Vec<usize>>::new(),
         }
     }
 }
@@ -53,6 +46,7 @@ impl Agent {
     pub fn new() -> Self {
         Self {
             states: Vec::<State>::new(),
+            states_index: HashMap::<(u32, u32), Vec<usize>>::new(),
             previous_index: None,
             previous_action: None,
             previous_q: None,
@@ -78,41 +72,19 @@ impl Agent {
             self.dilate_k,
         );
         if frame_abstraction.is_none() {
+            warn!("Frame abstraction not good enough");
             return 0;
         }
 
         let frame_abstraction = frame_abstraction.unwrap();
-
-        // Compute characters centroids
-        let width = frame_abstraction.width();
-        let half_width = (frame_abstraction.width() as f32 / 2.0) as u32;
-        let char1_centroid = vision::get_centroid(&frame_abstraction, [0, half_width]);
-        let char2_centroid = vision::get_centroid(&frame_abstraction, [half_width, width]);
-        let blob_limits = vision::get_blob_limits(&frame_abstraction);
-        let state = State::new(
-            frame_abstraction,
-            char1_centroid,
-            char2_centroid,
-            blob_limits,
-        );
+        let x_limits = vision::get_x_limits(&frame_abstraction);
+        let state = State::new(frame_abstraction, x_limits);
 
         // Search or Add
         let current_index: usize;
         let current_action: u8;
         let max_q: f32;
-        //let mut result = self.search_on_previous_next_states(&frame_abstraction);
-        //if result.is_none() {
-        //    //result = parallel_linear_search(
-        //        self.states.clone(),
-        //        frame_abstraction.clone(),
-        //        self.max_mse,
-        //    );
-        //}
-        let result = self.search_state(&state);
-        //if let Some(index) =
-        //    parallel_linear_search(self.states.clone(), frame_abstraction.clone(), self.max_mse)
-        //{
-        if let Some(index) = result {
+        if let Some(index) = self.search_state(&state) {
             // Existing state
             let current_state = &self.states[index];
             (current_action, max_q) = choose_best_action(current_state);
@@ -121,14 +93,24 @@ impl Agent {
         } else {
             // New state
             current_index = self.states.len();
-            //self.states.push(State::new(frame_abstraction, char1_centroid, char2_centroid, blob_limits));
             self.states.push(state);
             let mut rng = rand::thread_rng();
             current_action = rng.gen_range(0..=255);
             max_q = 0.0;
-            // Add to previous next states
+            // Index
+            if let Some(vector) = self.states_index.get_mut(&x_limits) {
+                vector.push(current_index);
+            } else {
+                self.states_index.insert(x_limits, vec![current_index]);
+            }
+            // Add to previous next states index
             if let Some(index) = self.previous_index {
-                self.states[index].next_states.insert(current_index);
+                let next_states = &mut self.states[index].next_states;
+                if let Some(vector) = next_states.get_mut(&x_limits) {
+                    vector.push(current_index);
+                } else {
+                    next_states.insert(x_limits, vec![current_index]);
+                }
             }
         }
 
@@ -153,18 +135,42 @@ impl Agent {
         current_action
     }
 
-    fn search_on_previous_next_states(&self, target: &RgbImage) -> Option<usize> {
-        if self.previous_index.is_none() {
-            return None;
+    fn search_state(&self, state: &State) -> Option<usize> {
+        // Search first in previous next states
+        if let Some(index) = self.previous_index {
+            let previous_state = &self.states[index];
+            if let Some(indexes) = previous_state.next_states.get(&state.x_limits) {
+                let result = self.search_state_in_index_vector(state, indexes);
+                if result.is_some() {
+                    return result;
+                }
+            }
         }
-        let mut min_mse: f32 = (1 << 16) as f32;
+        // Search in global index
+        if let Some(indexes) = self.states_index.get(&state.x_limits) {
+            return self.search_state_in_index_vector(state, indexes);
+        }
+        None
+    }
+
+    fn search_state_in_index_vector(
+        &self,
+        state: &State,
+        index_vector: &Vec<usize>,
+    ) -> Option<usize> {
+        let mut min_mse = 1.0;
         let mut best_index = 0;
-        let prev_index = self.previous_index.unwrap();
-        for index in &self.states[prev_index].next_states {
-            let frame_abstraction = &self.states[*index].frame_abstraction;
-            let mse = vision::get_mse(&frame_abstraction, &target);
-            // get_color_mse_foreground could be a good idea
-            // Or be stricter with max_mse
+        let frame_abstraction = &state.frame_abstraction;
+        let x_limits = state.x_limits;
+        for index in index_vector {
+            let other_frame_abstraction = &self.states[*index].frame_abstraction;
+            let other_x_limits = self.states[*index].x_limits;
+            let mse = vision::get_mse_in_x_limits(
+                &frame_abstraction,
+                &other_frame_abstraction,
+                x_limits,
+                other_x_limits,
+            );
             if mse < min_mse {
                 min_mse = mse;
                 best_index = *index;
@@ -176,69 +182,13 @@ impl Agent {
         None
     }
 
-    #[allow(dead_code)]
-    fn search_state(&self, target_state: &State) -> Option<usize> {
-        let mut min_mse = 1.0;
-        let mut best_index = 0;
-        for (index, state) in &mut self.states.iter().enumerate() {
-            let (are_equal, mse) = self.are_states_equal(&state, target_state);
-            if are_equal && mse < min_mse {
-                min_mse = mse;
-                best_index = index;
-            }
-            //let mse = vision::get_mse(&state.frame_abstraction, &target);
-            //// get_color_mse_foreground could be a good idea
-            //// Or be stricter with max_mse
-            //if mse < min_mse {
-            //    min_mse = mse;
-            //    best_index = index;
-            //}
-        }
-        if min_mse < self.max_mse {
-            return Some(best_index);
-        }
-        None
-    }
-
-    fn are_states_equal(&self, state1: &State, state2: &State) -> (bool, f32) {
-        let width1 = state1.blob_limits.0[1] - state1.blob_limits.0[0];
-        let width2 = state2.blob_limits.0[1] - state2.blob_limits.0[0];
-        let height1 = state1.blob_limits.1[1] - state1.blob_limits.1[0];
-        let height2 = state2.blob_limits.1[1] - state2.blob_limits.1[0];
-        if width1 == width2 && height1 == height2 {
-            let mse = vision::get_mse_in_roi(
-                &state1.frame_abstraction,
-                &state2.frame_abstraction,
-                state1.blob_limits,
-                state2.blob_limits,
-            );
-            if mse < self.max_mse {
-                return (true, mse);
-            }
-        }
-        (false, 0.0)
-    }
-
     pub fn get_last_state_abstraction(&self) -> RgbImage {
-        //if let (Some(index), Some(q)) = (self.previous_index, self.previous_q) {
-        //    let mut frame = self.states[index].frame_abstraction.clone();
-        //    vision::enclose_with_q(&mut frame, q);
-        //    return frame;
-        //}
         if let Some(index) = self.previous_index {
             let mut frame = self.states[index].frame_abstraction.clone();
-            //if index < self.states.len() - 1 {
-            let char1_centroid = self.states[index].char1_centroid;
-            let char2_centroid = self.states[index].char2_centroid;
-            //vision::decorate_frame(&mut frame, char1_centroid, char2_centroid);
-            //let distance = char2_centroid[0] - char1_centroid[0];
-            //let middle = char1_centroid[0] + (distance as f32 / 2.0) as u32;
-            //vision::add_sections(&mut frame, middle);
-            vision::enclose_blobs(&mut frame);
-            //}
+            let x_limits = self.states[index].x_limits;
+            vision::draw_x_limits(&mut frame, x_limits);
             if index < self.states.len() - 1 {
-                vision::enclose_with_q(&mut frame, 1.0);
-
+                vision::draw_border(&mut frame);
             }
             return frame;
         }
@@ -298,6 +248,7 @@ fn choose_best_action(state: &State) -> (u8, f32) {
     (rng.gen_range(0..=255), max_q)
 }
 
+#[allow(dead_code)]
 fn parallel_linear_search(data: Vec<State>, target: RgbImage, max_mse: f32) -> Option<usize> {
     if data.len() < 8 {
         return None;

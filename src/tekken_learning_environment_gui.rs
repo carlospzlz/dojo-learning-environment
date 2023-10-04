@@ -130,7 +130,7 @@ impl MyApp {
             opponent_life_info: LifeInfo::default(),
             replay: None,
             agent: Agent::new(),
-            observation_frequency: 10,
+            observation_frequency: 50,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
@@ -139,7 +139,7 @@ impl MyApp {
             green_thresholds: [15, 165],
             blue_thresholds: [15, 156],
             dilate_k: 6,
-            max_mse: 0.012,
+            max_mse: 0.04,
         }
     }
 }
