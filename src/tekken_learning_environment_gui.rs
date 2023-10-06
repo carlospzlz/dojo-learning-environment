@@ -17,7 +17,6 @@ use psx::System;
 use q_learning::Agent;
 use vision::LifeInfo;
 
-const SIDE_PANEL_WIDTH: f32 = 170.0;
 const STATES_DIR: &str = "states";
 const REPLAY_DURATION: Duration = Duration::from_secs(2);
 
@@ -316,7 +315,6 @@ impl MyApp {
 
     fn left_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("my_left_panel")
-            .default_width(SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
                 // General
                 ui.horizontal(|ui| {
@@ -477,7 +475,6 @@ impl MyApp {
 
     fn right_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("my_right_panel")
-            .exact_width(SIDE_PANEL_WIDTH)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Profiling");
