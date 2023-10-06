@@ -108,6 +108,38 @@ pub fn get_mse(img1: &RgbImage, img2: &RgbImage) -> f32 {
     mse
 }
 
+pub fn get_mask_error_in_x_limits(
+    mask: &GrayImage,
+    fat_mask: &GrayImage,
+    x_limits1: (u32, u32),
+    x_limits2: (u32, u32),
+) -> f32 {
+    let width1 = x_limits1.1 - x_limits1.0;
+    let width2 = x_limits2.1 - x_limits2.0;
+    if width1 != width2 {
+        panic!(
+            "X limits differ: {}-{}, {}-{}",
+            x_limits1.0, x_limits1.1, x_limits2.0, x_limits2.1
+        )
+    }
+    // How many pixels fall in the fat mask?
+    let mut total = 0;
+    let mut out_mask = 0;
+    for x in 0..width1 {
+        for y in 0..mask.height() {
+            let pixel = mask.get_pixel(x_limits1.0 + x, y);
+            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+                let pixel = fat_mask.get_pixel(x_limits2.0 + x, y);
+                if pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 {
+                    out_mask += 1;
+                }
+                total += 1;
+            }
+        }
+    }
+    out_mask as f32 / total as f32
+}
+
 pub fn get_mse_in_x_limits(
     img1: &RgbImage,
     img2: &RgbImage,
@@ -151,13 +183,13 @@ pub fn get_frame_abstraction(
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
-) -> Option<RgbImage> {
+) -> Option<GrayImage> {
     // Remove life bars
     let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
     let mut frame = frame.to_rgb8();
     let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
     let mask = DynamicImage::ImageRgb8(mask).to_luma8();
-    let mask = dilate(&mask, Norm::L1, dilate_k);
+    //let mask = dilate(&mask, Norm::L1, dilate_k);
     // Discard bad abstractions
     if get_detected_amount(&mask) < 0.02 {
         println!("Discarded");
@@ -165,9 +197,14 @@ pub fn get_frame_abstraction(
     }
     apply_mask(&mut frame, &mask);
     //Down-size, so compute time doesn't explode
-    let frame = DynamicImage::ImageRgb8(frame);
+    let frame = DynamicImage::ImageLuma8(mask);
     let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    Some(frame.to_rgb8())
+    Some(frame.to_luma8())
+    //Some(mask)
+}
+
+pub fn make_fat(img: &GrayImage, dilate_k: u8) -> GrayImage {
+    dilate(&img, Norm::L1, dilate_k)
 }
 
 #[allow(dead_code)]
@@ -272,14 +309,13 @@ fn get_detected_amount(img: &GrayImage) -> f32 {
     count as f32 / (img.width() * img.height()) as f32
 }
 
-#[allow(dead_code)]
-pub fn get_x_limits(img: &RgbImage) -> (u32, u32) {
+pub fn get_x_limits(img: &GrayImage) -> (u32, u32) {
     let mut min_x = img.width();
     let mut max_x = 0;
     for x in 0..img.width() {
         for y in 0..img.height() {
             let pixel = img.get_pixel(x, y);
-            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+            if pixel[0] > 0 {
                 min_x = cmp::min(x, min_x);
                 max_x = cmp::max(x, max_x);
             }
@@ -305,5 +341,18 @@ pub fn draw_border(img: &mut RgbImage) {
     for y in 0..img.height() {
         img.put_pixel(0, y, color);
         img.put_pixel(img.width() - 1, y, color);
+    }
+}
+
+pub fn draw_previous_thin_mask(img: &RgbImage, thin_mask: &GrayImage) {
+    let mut min_x = img.width();
+    let mut max_x = 0;
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            let pixel = thin_mask.get_pixel(x, y);
+            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+                img.put_pixel(x, y, Rgb([0, 255, 255]));
+            }
+        }
     }
 }

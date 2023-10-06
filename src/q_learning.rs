@@ -1,4 +1,4 @@
-use image::RgbImage;
+use image::{RgbImage, GrayImage};
 use log::warn;
 use rand::Rng;
 use std::collections::HashMap;
@@ -13,6 +13,7 @@ pub struct Agent {
     previous_index: Option<usize>,
     previous_action: Option<u8>,
     previous_q: Option<f32>,
+    previous_thin_mask: Option<GrayImage>,
     number_of_revisited_states: usize,
     discount_factor: f32,
     learning_rate: f32,
@@ -25,14 +26,14 @@ pub struct Agent {
 
 #[derive(Clone)]
 struct State {
-    frame_abstraction: RgbImage,
+    frame_abstraction: GrayImage,
     x_limits: (u32, u32),
     q: [f32; 256],
     next_states: HashMap<(u32, u32), Vec<usize>>,
 }
 
 impl State {
-    fn new(frame_abstraction: RgbImage, x_limits: (u32, u32)) -> Self {
+    fn new(frame_abstraction: GrayImage, x_limits: (u32, u32)) -> Self {
         Self {
             frame_abstraction,
             x_limits,
@@ -50,6 +51,7 @@ impl Agent {
             previous_index: None,
             previous_action: None,
             previous_q: None,
+            previous_thin_mask: None,
             number_of_revisited_states: 0,
             discount_factor: 0.9,
             learning_rate: 0.5,
@@ -78,7 +80,7 @@ impl Agent {
 
         let frame_abstraction = frame_abstraction.unwrap();
         let x_limits = vision::get_x_limits(&frame_abstraction);
-        let state = State::new(frame_abstraction, x_limits);
+        let mut state = State::new(frame_abstraction, x_limits);
 
         // Search or Add
         let current_index: usize;
@@ -93,6 +95,7 @@ impl Agent {
         } else {
             // New state
             current_index = self.states.len();
+            state.frame_abstraction = vision::make_fat(state.frame_abstraction, self.dilate_k);
             self.states.push(state);
             let mut rng = rand::thread_rng();
             current_action = rng.gen_range(0..=255);
@@ -131,6 +134,7 @@ impl Agent {
         self.previous_index = Some(current_index);
         self.previous_action = Some(current_action);
         self.previous_q = Some(max_q);
+        self.previous_thin_mask = Some(frame_abstraction);
 
         current_action
     }
@@ -189,6 +193,7 @@ impl Agent {
             vision::draw_x_limits(&mut frame, x_limits);
             if index < self.states.len() - 1 {
                 vision::draw_border(&mut frame);
+                vision::draw_previous_thin_mask(&mut frame, &self.previous_thin_mask);
             }
             return frame;
         }
