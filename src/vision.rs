@@ -128,9 +128,9 @@ pub fn get_mask_error_in_x_limits(
     for x in 0..width1 {
         for y in 0..mask.height() {
             let pixel = mask.get_pixel(x_limits1.0 + x, y);
-            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+            if pixel[0] > 0 {
                 let pixel = fat_mask.get_pixel(x_limits2.0 + x, y);
-                if pixel[0] == 0 && pixel[1] == 0 && pixel[2] == 0 {
+                if pixel[0] == 0 {
                     out_mask += 1;
                 }
                 total += 1;
@@ -138,6 +138,32 @@ pub fn get_mask_error_in_x_limits(
         }
     }
     out_mask as f32 / total as f32
+}
+
+pub fn get_error_in_x_limits(
+    mask: &GrayImage,
+    fat_mask: &GrayImage,
+    x_limits1: (u32, u32),
+    x_limits2: (u32, u32),
+) -> f32 {
+    let width1 = x_limits1.1 - x_limits1.0;
+    let width2 = x_limits2.1 - x_limits2.0;
+    if width1 != width2 {
+        panic!(
+            "X limits differ: {}-{}, {}-{}",
+            x_limits1.0, x_limits1.1, x_limits2.0, x_limits2.1
+        )
+    }
+    // How many pixels fall in the fat mask?
+    let mut count = 0;
+    for x in 0..width1 {
+        for y in 0..mask.height() {
+            let pixel1 = mask.get_pixel(x_limits1.0 + x, y);
+            let pixel2 = fat_mask.get_pixel(x_limits2.0 + x, y);
+            count += if pixel1[0] != pixel2[0] { 1 } else { 0 };
+        }
+    }
+    count as f32 / (width1 * mask.height()) as f32
 }
 
 pub fn get_mse_in_x_limits(
@@ -191,10 +217,10 @@ pub fn get_frame_abstraction(
     let mask = DynamicImage::ImageRgb8(mask).to_luma8();
     //let mask = dilate(&mask, Norm::L1, dilate_k);
     // Discard bad abstractions
-    if get_detected_amount(&mask) < 0.02 {
-        println!("Discarded");
-        return None;
-    }
+    //if get_detected_amount(&mask) < 0.02 {
+    //    println!("Discarded");
+    //    return None;
+    //}
     apply_mask(&mut frame, &mask);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageLuma8(mask);
@@ -324,16 +350,14 @@ pub fn get_x_limits(img: &GrayImage) -> (u32, u32) {
     (min_x, max_x)
 }
 
-pub fn draw_x_limits(img: &mut RgbImage, x_limits: (u32, u32)) {
-    let color = Rgb([0, 128, 0]);
+pub fn draw_x_limits(img: &mut RgbImage, x_limits: (u32, u32), color: Rgb<u8>) {
     for y in 0..img.height() {
         img.put_pixel(x_limits.0, y, color);
         img.put_pixel(x_limits.1, y, color);
     }
 }
 
-pub fn draw_border(img: &mut RgbImage) {
-    let color = Rgb([128, 0, 128]);
+pub fn draw_border(img: &mut RgbImage, color: Rgb<u8>) {
     for x in 0..img.width() {
         img.put_pixel(x, 0, color);
         img.put_pixel(x, img.height() - 1, color);
@@ -344,14 +368,25 @@ pub fn draw_border(img: &mut RgbImage) {
     }
 }
 
-pub fn draw_previous_thin_mask(img: &RgbImage, thin_mask: &GrayImage) {
+pub fn colorize(img: &mut RgbImage, color: Rgb<u8>) {
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
+                img.put_pixel(x, y, color);
+            }
+        }
+    }
+}
+
+pub fn draw_previous_thin_mask(img: &mut RgbImage, thin_mask: &GrayImage, color: Rgb<u8>) {
     let mut min_x = img.width();
     let mut max_x = 0;
     for x in 0..img.width() {
         for y in 0..img.height() {
             let pixel = thin_mask.get_pixel(x, y);
-            if pixel[0] > 0 || pixel[1] > 0 || pixel[2] > 0 {
-                img.put_pixel(x, y, Rgb([0, 255, 255]));
+            if pixel[0] > 0 {
+                img.put_pixel(x, y, color);
             }
         }
     }

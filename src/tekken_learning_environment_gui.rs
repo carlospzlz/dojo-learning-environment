@@ -129,7 +129,7 @@ impl MyApp {
             opponent_life_info: LifeInfo::default(),
             replay: None,
             agent: Agent::new(),
-            observation_frequency: 50,
+            observation_frequency: 20,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
@@ -137,8 +137,8 @@ impl MyApp {
             red_thresholds: [0, 173],
             green_thresholds: [15, 165],
             blue_thresholds: [15, 156],
-            dilate_k: 6,
-            max_mse: 0.04,
+            dilate_k: 1,
+            max_mse: 0.3,
         }
     }
 }
@@ -407,7 +407,7 @@ impl MyApp {
                 ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
                 ui.end_row();
                 ui.label("MSE");
-                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
+                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(5));
             });
             ui.horizontal(|_ui| {});
 
