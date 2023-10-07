@@ -166,43 +166,71 @@ pub fn get_error_in_x_limits(
     count as f32 / (width1 * mask.height()) as f32
 }
 
-pub fn get_mse_in_x_limits(
-    img1: &RgbImage,
-    img2: &RgbImage,
-    x_limits1: (u32, u32),
-    x_limits2: (u32, u32),
-) -> f32 {
-    let width1 = x_limits1.1 - x_limits1.0;
-    let width2 = x_limits2.1 - x_limits2.0;
-    if width1 != width2 {
-        panic!(
-            "X limits differ: {}-{}, {}-{}",
-            x_limits1.0, x_limits1.1, x_limits2.0, x_limits2.1
-        )
-    }
-    let mut sum_squared_diff: i64 = 0;
-    let mut count = 0;
-    for x in 0..width1 {
-        for y in 0..img1.height() {
-            let pixel1 = img1.get_pixel(x_limits1.0 + x, y);
-            let pixel2 = img2.get_pixel(x_limits2.0 + x, y);
-            let r1 = pixel1[0] as i64;
-            let g1 = pixel1[1] as i64;
-            let b1 = pixel1[2] as i64;
-            let r2 = pixel2[0] as i64;
-            let g2 = pixel2[1] as i64;
-            let b2 = pixel2[2] as i64;
-            if (r1, g1, b1) != (0, 0, 0) || (r2, g2, b2) != (0, 0, 0) {
-                sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
-                count += 1;
-            }
-        }
-    }
-    let max_sum_squared_diff = count * 255_u32.pow(2) * 3;
-    let mse = sum_squared_diff as f32 / max_sum_squared_diff as f32;
-    mse
-}
+//pub fn get_mse_in_x_limits(
+//    img1: &RgbImage,
+//    img2: &RgbImage,
+//    x_limits1: (u32, u32),
+//    x_limits2: (u32, u32),
+//) -> f32 {
+//    let width1 = x_limits1.1 - x_limits1.0;
+//    let width2 = x_limits2.1 - x_limits2.0;
+//    if width1 != width2 {
+//        panic!(
+//            "X limits differ: {}-{}, {}-{}",
+//            x_limits1.0, x_limits1.1, x_limits2.0, x_limits2.1
+//        )
+//    }
+//    let mut sum_squared_diff: i64 = 0;
+//    let mut count = 0;
+//    for x in 0..width1 {
+//        for y in 0..img1.height() {
+//            let pixel1 = img1.get_pixel(x_limits1.0 + x, y);
+//            let pixel2 = img2.get_pixel(x_limits2.0 + x, y);
+//            let r1 = pixel1[0] as i64;
+//            let g1 = pixel1[1] as i64;
+//            let b1 = pixel1[2] as i64;
+//            let r2 = pixel2[0] as i64;
+//            let g2 = pixel2[1] as i64;
+//            let b2 = pixel2[2] as i64;
+//            if (r1, g1, b1) != (0, 0, 0) || (r2, g2, b2) != (0, 0, 0) {
+//                sum_squared_diff += (r1 - r2).pow(2) + (g1 - g2).pow(2) + (b1 - b2).pow(2);
+//                count += 1;
+//            }
+//        }
+//    }
+//    let max_sum_squared_diff = count * 255_u32.pow(2) * 3;
+//    let mse = sum_squared_diff as f32 / max_sum_squared_diff as f32;
+//    mse
+//}
 
+//pub fn get_error_in_x_limits(
+//    img1: &GrayImage,
+//    img2: &GrayImage,
+//    x_limits1: (u32, u32),
+//    x_limits2: (u32, u32),
+//) -> f32 {
+//    let width1 = x_limits1.1 - x_limits1.0;
+//    let width2 = x_limits2.1 - x_limits2.0;
+//    if width1 != width2 {
+//        panic!(
+//            "X limits differ: {}-{}, {}-{}",
+//            x_limits1.0, x_limits1.1, x_limits2.0, x_limits2.1
+//        )
+//    }
+//    let mut count = 0;
+//    for x in 0..width1 {
+//        for y in 0..img1.height() {
+//            let pixel1 = img1.get_pixel(x_limits1.0 + x, y);
+//            let pixel2 = img2.get_pixel(x_limits2.0 + x, y);
+//            if pixel1[0] != pixel2[0] {
+//                count += 1;
+//            }
+//        }
+//    }
+//    let error = count as f32 / (width1 * img1.height()) as f32;
+//    error
+//}
+//
 pub fn get_frame_abstraction(
     frame: &RgbImage,
     red_thresholds: [u8; 2],
@@ -215,7 +243,7 @@ pub fn get_frame_abstraction(
     let mut frame = frame.to_rgb8();
     let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
     let mask = DynamicImage::ImageRgb8(mask).to_luma8();
-    //let mask = dilate(&mask, Norm::L1, dilate_k);
+    let mask = dilate(&mask, Norm::L1, dilate_k);
     // Discard bad abstractions
     //if get_detected_amount(&mask) < 0.02 {
     //    println!("Discarded");
@@ -224,8 +252,9 @@ pub fn get_frame_abstraction(
     apply_mask(&mut frame, &mask);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageLuma8(mask);
-    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    Some(frame.to_luma8())
+    let frame = frame.resize_exact(200, 200, image::imageops::FilterType::Nearest);
+    let frame = frame.to_luma8();
+    Some(frame)
     //Some(mask)
 }
 

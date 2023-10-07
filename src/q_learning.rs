@@ -82,7 +82,7 @@ impl Agent {
 
         let frame_abstraction = frame_abstraction.unwrap();
         let x_limits = vision::get_x_limits(&frame_abstraction);
-        let mut state = State::new(frame_abstraction.clone(), x_limits);
+        let state = State::new(frame_abstraction.clone(), x_limits);
 
         // Search or Add
         let current_index: usize;
@@ -102,7 +102,7 @@ impl Agent {
         } else {
             // New state
             current_index = self.states.len();
-            state.frame_abstraction = vision::make_fat(&state.frame_abstraction, self.dilate_k);
+            //state.frame_abstraction = vision::make_fat(&state.frame_abstraction, self.dilate_k);
             self.states.push(state);
             let mut rng = rand::thread_rng();
             current_action = rng.gen_range(0..=255);
@@ -177,7 +177,7 @@ impl Agent {
         for index in index_vector {
             let other_frame_abstraction = &self.states[*index].frame_abstraction;
             let other_x_limits = self.states[*index].x_limits;
-            let mse = vision::get_mask_error_in_x_limits(
+            let mse = vision::get_error_in_x_limits(
                 &frame_abstraction,
                 &other_frame_abstraction,
                 x_limits,
