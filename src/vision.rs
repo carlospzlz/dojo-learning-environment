@@ -155,7 +155,7 @@ pub fn get_frame_abstraction(
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
-) -> Option<RgbImage> {
+) -> (Option<RgbImage>, Option<Mat>) {
     // Remove life bars
     let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
     //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
@@ -205,7 +205,7 @@ pub fn get_frame_abstraction(
     //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
     //let frame = DynamicImage::ImageLuma8(frame);
     //Some(frame.to_rgb8())
-    Some(frame)
+    (Some(frame), Some(descriptors))
 }
 
 #[allow(dead_code)]

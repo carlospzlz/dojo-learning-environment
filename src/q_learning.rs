@@ -4,6 +4,11 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use opencv::core::Mat;
+use opencv::features2d;
+use opencv::types;
+use opencv::core::NORM_HAMMING;
+use opencv::prelude::DescriptorMatcherTrait;
 
 use super::vision;
 
@@ -27,15 +32,17 @@ pub struct Agent {
 struct State {
     frame_abstraction: RgbImage,
     x_limits: (u32, u32),
+    descriptors: Mat,
     q: [f32; 256],
     next_states: HashMap<(u32, u32), Vec<usize>>,
 }
 
 impl State {
-    fn new(frame_abstraction: RgbImage, x_limits: (u32, u32)) -> Self {
+    fn new(frame_abstraction: RgbImage, x_limits: (u32, u32), descriptors: Mat) -> Self {
         Self {
             frame_abstraction,
             x_limits,
+            descriptors,
             q: [0.0; 256],
             next_states: HashMap::<(u32, u32), Vec<usize>>::new(),
         }
@@ -64,7 +71,7 @@ impl Agent {
     pub fn visit_state(&mut self, frame: RgbImage, reward: f32) -> u8 {
         // We need a way to recognize equivalent states
         // This is one of the most important/challenging parts
-        let frame_abstraction = vision::get_frame_abstraction(
+        let (frame_abstraction, descriptors) = vision::get_frame_abstraction(
             &frame,
             self.red_thresholds,
             self.green_thresholds,
@@ -78,7 +85,8 @@ impl Agent {
 
         let frame_abstraction = frame_abstraction.unwrap();
         let x_limits = vision::get_x_limits(&frame_abstraction);
-        let state = State::new(frame_abstraction, x_limits);
+        let descriptors = descriptors.unwrap();
+        let state = State::new(frame_abstraction, x_limits, descriptors);
 
         // Search or Add
         let current_index: usize;
@@ -136,7 +144,27 @@ impl Agent {
     }
 
     fn search_state(&self, state: &State) -> Option<usize> {
+        // Brute force with descriptors just to try
+        for (index, other_state) in self.states.iter().enumerate() {
+            let orb = features2d::ORB::default().unwrap();
+            let mut bf_matcher = features2d::BFMatcher::create(NORM_HAMMING, true).unwrap();
+            let descriptors = &state.descriptors;
+            bf_matcher.add(descriptors);
+            bf_matcher.train();
+            let other_descriptors = &other_state.descriptors;
+            let mut matches = types::VectorOfDMatch::new();
+            bf_matcher.match_(&other_descriptors, &mut matches, &Mat::default()).unwrap();
+
+            let total_distance: f32 = matches.iter().map(|m| m.distance).sum();
+            let average_distance = total_distance / matches.len() as f32;
+
+            println!("{}", average_distance);
+            if average_distance < self.max_mse {
+                return Some(index);
+            }
+        }
         return None;
+
         // Search first in previous next states
         if let Some(index) = self.previous_index {
             let previous_state = &self.states[index];
@@ -249,46 +277,46 @@ fn choose_best_action(state: &State) -> (u8, f32) {
     (rng.gen_range(0..=255), max_q)
 }
 
-#[allow(dead_code)]
-fn parallel_linear_search(data: Vec<State>, target: RgbImage, max_mse: f32) -> Option<usize> {
-    if data.len() < 8 {
-        return None;
-    }
-    let data = Arc::new(data);
-    let result = Arc::new(Mutex::new(None::<(usize, f32)>));
-    let target = Arc::new(target);
-
-    let chunk_size = data.len() / 8;
-    let mut handles = vec![];
-
-    for i in 0..8 {
-        let data_clone = Arc::clone(&data);
-        let result_clone = Arc::clone(&result);
-        let target_clone = Arc::clone(&target);
-        let handle = thread::spawn(move || {
-            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
-            for (index, &ref state) in chunk.iter().enumerate() {
-                let mse = vision::get_mse(&state.frame_abstraction, &target_clone);
-                if mse < max_mse {
-                    // Lock the mutex to check/update result
-                    let mut result = result_clone.lock().unwrap();
-                    if result.is_none() || mse < result.unwrap().1 {
-                        *result = Some((i * chunk_size + index, mse));
-                    }
-                }
-            }
-        });
-        handles.push(handle);
-    }
-
-    for handle in handles {
-        handle.join().unwrap();
-    }
-
-    let result = result.lock().unwrap();
-    if let Some(local_result) = *result {
-        return Some(local_result.0);
-    }
-
-    None
-}
+//#[allow(dead_code)]
+//fn parallel_linear_search(data: Vec<State>, target: RgbImage, max_mse: f32) -> Option<usize> {
+//    if data.len() < 8 {
+//        return None;
+//    }
+//    let data = Arc::new(data);
+//    let result = Arc::new(Mutex::new(None::<(usize, f32)>));
+//    let target = Arc::new(target);
+//
+//    let chunk_size = data.len() / 8;
+//    let mut handles = vec![];
+//
+//    for i in 0..8 {
+//        let data_clone = Arc::clone(&data);
+//        let result_clone = Arc::clone(&result);
+//        let target_clone = Arc::clone(&target);
+//        let handle = thread::spawn(move || {
+//            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
+//            for (index, &ref state) in chunk.iter().enumerate() {
+//                let mse = vision::get_mse(&state.frame_abstraction, &target_clone);
+//                if mse < max_mse {
+//                    // Lock the mutex to check/update result
+//                    let mut result = result_clone.lock().unwrap();
+//                    if result.is_none() || mse < result.unwrap().1 {
+//                        *result = Some((i * chunk_size + index, mse));
+//                    }
+//                }
+//            }
+//        });
+//        handles.push(handle);
+//    }
+//
+//    for handle in handles {
+//        handle.join().unwrap();
+//    }
+//
+//    let result = result.lock().unwrap();
+//    if let Some(local_result) = *result {
+//        return Some(local_result.0);
+//    }
+//
+//    None
+//}

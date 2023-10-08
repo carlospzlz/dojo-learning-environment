@@ -408,7 +408,7 @@ impl MyApp {
                     ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
                     ui.end_row();
                     ui.label("MSE");
-                    ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
+                    ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=100.0).max_decimals(3));
                 });
                 ui.horizontal(|_ui| {});
 
