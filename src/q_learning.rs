@@ -136,6 +136,7 @@ impl Agent {
     }
 
     fn search_state(&self, state: &State) -> Option<usize> {
+        return None;
         // Search first in previous next states
         if let Some(index) = self.previous_index {
             let previous_state = &self.states[index];

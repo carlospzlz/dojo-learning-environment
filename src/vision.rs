@@ -2,6 +2,10 @@ use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::morphology::dilate;
 use std::cmp;
+use opencv::core::{Mat, Scalar, VecN};
+use opencv::features2d;
+use opencv::prelude::{MatTraitConst, MatTraitConstManual, Feature2DTrait};
+use opencv::imgproc;
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -154,20 +158,54 @@ pub fn get_frame_abstraction(
 ) -> Option<RgbImage> {
     // Remove life bars
     let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
-    let mut frame = frame.to_rgb8();
-    let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
-    let mask = DynamicImage::ImageRgb8(mask).to_luma8();
-    let mask = dilate(&mask, Norm::L1, dilate_k);
-    // Discard bad abstractions
-    if get_detected_amount(&mask) < 0.02 {
-        println!("Discarded");
-        return None;
+    //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
+    let frame = frame.to_luma8();
+    let pixel_data = frame.as_raw().to_vec();
+    let width = frame.width() as usize;
+    let height = frame.height() as usize;
+    let mat = Mat::from_slice_rows_cols(&pixel_data, height, width).unwrap();
+
+    let mut orb = features2d::ORB::default().unwrap();
+    let mut keypoints = opencv::types::VectorOfKeyPoint::new();
+    let mut descriptors = Mat::default();
+
+    orb.detect(&mat, &mut keypoints, &Mat::default());
+    orb.compute(&mat, &mut keypoints, &mut descriptors);
+
+    let mut output_image = Mat::default();
+    let color = Scalar::new(0.0, 255.0, 0.0, 0.0);
+    features2d::draw_keypoints(&mat, &keypoints, &mut output_image, color, features2d::DrawMatchesFlags::DEFAULT);
+
+    let width = output_image.cols() as u32;
+    let height = output_image.rows() as u32;
+    //let vec2d = output_image.to_vec_2d().unwrap();
+    //let data: Vec<u8> = vec2d.iter().flat_map(|v| v.iter()).cloned().collect();
+    let data = output_image.data_typed::<VecN<u8, 3>>().unwrap();
+    let mut frame = RgbImage::new(width, height);
+    for (x, y, pixel) in frame.enumerate_pixels_mut() {
+        let point = data[y as usize * width as usize + x as usize];
+        *pixel = Rgb([point[0] as u8, point[1] as u8, point[2] as u8]);
     }
-    apply_mask(&mut frame, &mask);
-    //Down-size, so compute time doesn't explode
-    let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    Some(frame.to_rgb8())
+
+    //let frame = RgbImage::from_raw(width, height, data.to_vec()).unwrap();
+    //let frame = DynamicImage::ImageLuma8(frame);
+
+    //let mut frame = frame.to_rgb8();
+    //let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
+    //let mask = DynamicImage::ImageRgb8(mask).to_luma8();
+    //let mask = dilate(&mask, Norm::L1, dilate_k);
+    //// Discard bad abstractions
+    //if get_detected_amount(&mask) < 0.02 {
+    //    println!("Discarded");
+    //    return None;
+    //}
+    //apply_mask(&mut frame, &mask);
+    ////Down-size, so compute time doesn't explode
+    //let frame = DynamicImage::ImageRgb8(frame);
+    //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
+    //let frame = DynamicImage::ImageLuma8(frame);
+    //Some(frame.to_rgb8())
+    Some(frame)
 }
 
 #[allow(dead_code)]
