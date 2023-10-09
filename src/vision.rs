@@ -2,6 +2,9 @@ use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::morphology::dilate;
 use std::cmp;
+use kmeans_colors::{Kmeans, get_kmeans};
+use palette::rgb::Rgb as PaletteRgb;
+
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -166,8 +169,38 @@ pub fn get_frame_abstraction(
     apply_mask(&mut frame, &mask);
     //Down-size, so compute time doesn't explode
     let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    Some(frame.to_rgb8())
+    let frame = frame.resize_exact(200, 200, image::imageops::FilterType::Lanczos3);
+    let frame = frame.to_rgb8();
+
+    // Try k-means
+    let palette = vec![];
+    for x in 0..frame.width() {
+        for y in 0..frame.height() {
+            let pixel = frame.get_pixel(x, y);
+            palette.push(PaletteRgb{red: pixel[0], green: pixel[1], blue: pixel[2]});
+        }
+    }
+    let mut result : Kmeans<PaletteRgb> = Kmeans::new();
+    let k = 8;
+    let max_iter = 20;
+    let converge = 0.0025;
+    let runs = 3;
+    let seed = 0;
+    for i in 0..runs {
+        let run_result = get_kmeans(
+            k,
+            max_iter,
+            converge,
+            false,
+            &palette,
+            seed + i as u64,
+        );
+        if run_result.score < result.score {
+            result = run_result;
+        }
+}
+
+    Some(frame)
 }
 
 #[allow(dead_code)]
