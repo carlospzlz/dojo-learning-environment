@@ -1,10 +1,9 @@
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::morphology::dilate;
-use std::cmp;
-use kmeans_colors::{Kmeans, get_kmeans};
+use kmeans_colors::{get_kmeans, Kmeans, MapColor};
 use palette::rgb::Rgb as PaletteRgb;
-
+use std::cmp;
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -173,32 +172,39 @@ pub fn get_frame_abstraction(
     let frame = frame.to_rgb8();
 
     // Try k-means
-    let palette = vec![];
+    let mut palette = vec![];
     for x in 0..frame.width() {
         for y in 0..frame.height() {
             let pixel = frame.get_pixel(x, y);
-            palette.push(PaletteRgb{red: pixel[0], green: pixel[1], blue: pixel[2]});
+            palette.push(PaletteRgb::new(
+                pixel[0] as f32,
+                pixel[1] as f32,
+                pixel[2] as f32,
+            ));
         }
     }
-    let mut result : Kmeans<PaletteRgb> = Kmeans::new();
-    let k = 8;
+    let mut result: Kmeans<PaletteRgb> = Kmeans::new();
+    let k = 6;
     let max_iter = 20;
     let converge = 0.0025;
     let runs = 3;
     let seed = 0;
     for i in 0..runs {
-        let run_result = get_kmeans(
-            k,
-            max_iter,
-            converge,
-            false,
-            &palette,
-            seed + i as u64,
-        );
+        let run_result = get_kmeans(k, max_iter, converge, false, &palette, seed + i as u64);
         if run_result.score < result.score {
             result = run_result;
         }
-}
+    }
+
+    let clustered_img = MapColor::map_indices_to_centroids(&result.centroids, &result.indices);
+    let mut frame = RgbImage::new(frame.width(), frame.height());
+    for x in 0..frame.width() {
+        for y in 0..frame.height() {
+            let index = (x * frame.height() + y) as usize;
+            let pixel = clustered_img[index];
+            frame.put_pixel(x, y, Rgb([pixel.red as u8, pixel.green as u8, pixel.blue as u8]));
+        }
+    }
 
     Some(frame)
 }
