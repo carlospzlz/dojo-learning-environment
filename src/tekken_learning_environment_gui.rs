@@ -314,149 +314,147 @@ impl MyApp {
     }
 
     fn left_panel(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::left("my_left_panel")
-            .show(ctx, |ui| {
-                // General
-                ui.horizontal(|ui| {
-                    ui.label("General");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
-                egui::Grid::new("general_options").show(ui, |ui| {
-                    ui.label("AI agent:");
-                    egui::ComboBox::from_id_source("agent_character")
-                        .selected_text(format!("{:?}", self.character1))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.character1, Character::Eddy, "Eddy");
-                            ui.selectable_value(&mut self.character1, Character::Jin, "Jin");
-                            ui.selectable_value(&mut self.character1, Character::King, "King");
-                            ui.selectable_value(&mut self.character1, Character::Law, "Law");
-                            ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
-                            ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
-                            ui.selectable_value(&mut self.character1, Character::Xiaoyu, "Xiaoyu");
-                            ui.selectable_value(&mut self.character1, Character::Random, "Random");
-                            ui.selectable_value(
-                                &mut self.character1,
-                                Character::Yoshimitsu,
-                                "Yoshimitsu",
-                            );
-                        });
-                    ui.end_row();
-                    ui.label("Opponent:");
-                    egui::ComboBox::from_id_source("opponent_character")
-                        .selected_text(format!("{:?}", self.character2))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.character2, Character::Eddy, "Eddy");
-                            ui.selectable_value(&mut self.character2, Character::Jin, "Jin");
-                            ui.selectable_value(&mut self.character2, Character::King, "King");
-                            ui.selectable_value(&mut self.character2, Character::Law, "Law");
-                            ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
-                            ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
-                            ui.selectable_value(&mut self.character2, Character::Xiaoyu, "Xiaoyu");
-                            ui.selectable_value(&mut self.character2, Character::Random, "Random");
-                            ui.selectable_value(
-                                &mut self.character2,
-                                Character::Yoshimitsu,
-                                "Yoshimitsu",
-                            );
-                        });
-                    ui.end_row();
-                    ui.label("Obs Freq (Hz):");
-                    ui.add(egui::DragValue::new(&mut self.observation_frequency).speed(0.1));
-                    ui.end_row();
-                    ui.label("Vision");
-                    egui::ComboBox::from_id_source("vision")
-                        .selected_text(format!("{:?}", self.vision))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.vision, Vision::PSX, "PSX");
-                            ui.selectable_value(&mut self.vision, Vision::Life, "Life");
-                            ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
-                            ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
-                        });
-                    ui.end_row();
-                    ui.label("Split View");
-                    ui.checkbox(&mut self.split_view, "");
-                });
-                ui.horizontal(|_ui| {});
-
-                // Vision Pipeline
-                ui.horizontal(|ui| {
-                    ui.label("Vision Pipeline");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
-                egui::Grid::new("vision_pipeline").show(ui, |ui| {
-                    ui.label("Red");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
-                        ui.add(egui::DragValue::new(&mut self.red_thresholds[1]));
-                    });
-                    ui.end_row();
-                    ui.label("Green");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.green_thresholds[0]));
-                        ui.add(egui::DragValue::new(&mut self.green_thresholds[1]));
-                    });
-                    ui.end_row();
-                    ui.label("Blue");
-                    ui.horizontal(|ui| {
-                        ui.add(egui::DragValue::new(&mut self.blue_thresholds[0]));
-                        ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
-                    });
-                    ui.end_row();
-                    ui.label("Dilate");
-                    ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
-                    ui.end_row();
-                    ui.label("MSE");
-                    ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=100.0).max_decimals(3));
-                });
-                ui.horizontal(|_ui| {});
-
-                // Reinforcement Learning
-                ui.horizontal(|ui| {
-                    ui.label("Reinforcement Learning");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
-                egui::Grid::new("reinforcement_learning").show(ui, |ui| {
-                    ui.label("Learning Rate:");
-                    let learning_rate_widget = egui::DragValue::new(&mut self.learning_rate);
-                    let learning_rate_widget = learning_rate_widget.speed(0.01).clamp_range(0..=1);
-                    ui.add(learning_rate_widget);
-                    ui.end_row();
-                    ui.label("Discount Factor:");
-                    let discount_factor_widget = egui::DragValue::new(&mut self.discount_factor);
-                    let discount_factor_widget =
-                        discount_factor_widget.speed(0.01).clamp_range(0..=1);
-                    ui.add(discount_factor_widget);
-                });
-                ui.horizontal(|_ui| {});
-                ui.horizontal(|ui| {
-                    // Emulator Controls
-                    if ui.button("Start").clicked() {
-                        if self.current_combat.is_none() {
-                            self.load_current_combat();
-                        }
-                        self.is_running = true;
-                    }
-                    if ui.button("Stop").clicked() {
-                        self.is_running = false;
-                    }
-                    if ui.button("Next").clicked() {
-                        if !self.is_running {
-                            self.process_frame();
-                            ctx.request_repaint();
-                        }
-                    }
-                });
-                ui.horizontal(|_ui| {});
-                // Simulation
-                ui.horizontal(|ui| {
-                    ui.label("Simulation");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
+        egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
+            // General
+            ui.horizontal(|ui| {
+                ui.label("General");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
             });
+            egui::Grid::new("general_options").show(ui, |ui| {
+                ui.label("AI agent:");
+                egui::ComboBox::from_id_source("agent_character")
+                    .selected_text(format!("{:?}", self.character1))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.character1, Character::Eddy, "Eddy");
+                        ui.selectable_value(&mut self.character1, Character::Jin, "Jin");
+                        ui.selectable_value(&mut self.character1, Character::King, "King");
+                        ui.selectable_value(&mut self.character1, Character::Law, "Law");
+                        ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
+                        ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
+                        ui.selectable_value(&mut self.character1, Character::Xiaoyu, "Xiaoyu");
+                        ui.selectable_value(&mut self.character1, Character::Random, "Random");
+                        ui.selectable_value(
+                            &mut self.character1,
+                            Character::Yoshimitsu,
+                            "Yoshimitsu",
+                        );
+                    });
+                ui.end_row();
+                ui.label("Opponent:");
+                egui::ComboBox::from_id_source("opponent_character")
+                    .selected_text(format!("{:?}", self.character2))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.character2, Character::Eddy, "Eddy");
+                        ui.selectable_value(&mut self.character2, Character::Jin, "Jin");
+                        ui.selectable_value(&mut self.character2, Character::King, "King");
+                        ui.selectable_value(&mut self.character2, Character::Law, "Law");
+                        ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
+                        ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
+                        ui.selectable_value(&mut self.character2, Character::Xiaoyu, "Xiaoyu");
+                        ui.selectable_value(&mut self.character2, Character::Random, "Random");
+                        ui.selectable_value(
+                            &mut self.character2,
+                            Character::Yoshimitsu,
+                            "Yoshimitsu",
+                        );
+                    });
+                ui.end_row();
+                ui.label("Obs Freq (Hz):");
+                ui.add(egui::DragValue::new(&mut self.observation_frequency).speed(0.1));
+                ui.end_row();
+                ui.label("Vision");
+                egui::ComboBox::from_id_source("vision")
+                    .selected_text(format!("{:?}", self.vision))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.vision, Vision::PSX, "PSX");
+                        ui.selectable_value(&mut self.vision, Vision::Life, "Life");
+                        ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
+                        ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
+                    });
+                ui.end_row();
+                ui.label("Split View");
+                ui.checkbox(&mut self.split_view, "");
+            });
+            ui.horizontal(|_ui| {});
+
+            // Vision Pipeline
+            ui.horizontal(|ui| {
+                ui.label("Vision Pipeline");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
+            egui::Grid::new("vision_pipeline").show(ui, |ui| {
+                ui.label("Red");
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
+                    ui.add(egui::DragValue::new(&mut self.red_thresholds[1]));
+                });
+                ui.end_row();
+                ui.label("Green");
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.green_thresholds[0]));
+                    ui.add(egui::DragValue::new(&mut self.green_thresholds[1]));
+                });
+                ui.end_row();
+                ui.label("Blue");
+                ui.horizontal(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.blue_thresholds[0]));
+                    ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
+                });
+                ui.end_row();
+                ui.label("Dilate");
+                ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
+                ui.end_row();
+                ui.label("MSE");
+                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=100.0).max_decimals(3));
+            });
+            ui.horizontal(|_ui| {});
+
+            // Reinforcement Learning
+            ui.horizontal(|ui| {
+                ui.label("Reinforcement Learning");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
+            egui::Grid::new("reinforcement_learning").show(ui, |ui| {
+                ui.label("Learning Rate:");
+                let learning_rate_widget = egui::DragValue::new(&mut self.learning_rate);
+                let learning_rate_widget = learning_rate_widget.speed(0.01).clamp_range(0..=1);
+                ui.add(learning_rate_widget);
+                ui.end_row();
+                ui.label("Discount Factor:");
+                let discount_factor_widget = egui::DragValue::new(&mut self.discount_factor);
+                let discount_factor_widget = discount_factor_widget.speed(0.01).clamp_range(0..=1);
+                ui.add(discount_factor_widget);
+            });
+            ui.horizontal(|_ui| {});
+            ui.horizontal(|ui| {
+                // Emulator Controls
+                if ui.button("Start").clicked() {
+                    if self.current_combat.is_none() {
+                        self.load_current_combat();
+                    }
+                    self.is_running = true;
+                }
+                if ui.button("Stop").clicked() {
+                    self.is_running = false;
+                }
+                if ui.button("Next").clicked() {
+                    if !self.is_running {
+                        self.process_frame();
+                        ctx.request_repaint();
+                    }
+                }
+            });
+            ui.horizontal(|_ui| {});
+            // Simulation
+            ui.horizontal(|ui| {
+                ui.label("Simulation");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
+        });
     }
 
     fn load_current_combat(&mut self) {
@@ -474,75 +472,74 @@ impl MyApp {
     }
 
     fn right_panel(&mut self, ctx: &egui::Context) {
-        egui::SidePanel::right("my_right_panel")
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Profiling");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
-                egui::Grid::new("profiling").show(ui, |ui| {
-                    ui.label("FPS:");
-                    if self.frame_time.total_time.as_millis() > 0 {
-                        ui.label(format!(
-                            "{:.2}",
-                            (1000 / self.frame_time.total_time.as_millis())
-                        ));
-                    } else {
-                        ui.label("/0");
-                    }
-                    ui.end_row();
-                    ui.label("Total Time (ms):");
-                    ui.label(format!("{:.2}", self.frame_time.total_time.as_millis()));
-                    ui.end_row();
-                    ui.label("UI Time (ms):");
-                    ui.label(format!("{:.2}", self.frame_time.ui_time.as_millis()));
-                    ui.end_row();
-                    ui.label("PSX Time (ms):");
-                    ui.label(format!("{:.2}", self.frame_time.psx_time.as_millis()));
-                    ui.end_row();
-                    ui.label("Agent Time (ms):");
-                    ui.label(format!("{:.2}", self.frame_time.agent_time.as_millis()));
-                    ui.end_row();
-                });
-                ui.horizontal(|_ui| {});
-                ui.horizontal(|ui| {
-                    ui.label("Life Stats");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
-                egui::Grid::new("life_stats").show(ui, |ui| {
-                    ui.label("Life:");
-                    ui.label(format!("{:.4}", self.agent_life_info.life));
-                    ui.label(format!("{:.4}", self.opponent_life_info.life));
-                    ui.end_row();
-                    ui.label("Damage:");
-                    ui.label(format!("{:.4}", self.agent_life_info.damage));
-                    ui.label(format!("{:.4}", self.opponent_life_info.damage));
-                    ui.end_row();
-                });
-                ui.horizontal(|_ui| {});
-                ui.horizontal(|ui| {
-                    ui.label("AI Agent");
-                    let separator = egui::Separator::default();
-                    ui.add(separator.horizontal());
-                });
-                egui::Grid::new("ai_agent").show(ui, |ui| {
-                    ui.label("Total States:");
-                    let number_of_states = format!("{}", self.agent.get_number_of_states());
-                    ui.label(number_of_states);
-                    ui.end_row();
-                    ui.label("Revisited States:");
-                    let number_of_revisited_states =
-                        format!("{}", self.agent.get_number_of_revisited_states());
-                    ui.label(number_of_revisited_states);
-                    ui.end_row();
-                    ui.label("Previous Next States:");
-                    let previous_next_states =
-                        format!("{}", self.agent.get_number_of_previous_next_states());
-                    ui.label(previous_next_states);
-                });
+        egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Profiling");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
             });
+            egui::Grid::new("profiling").show(ui, |ui| {
+                ui.label("FPS:");
+                if self.frame_time.total_time.as_millis() > 0 {
+                    ui.label(format!(
+                        "{:.2}",
+                        (1000 / self.frame_time.total_time.as_millis())
+                    ));
+                } else {
+                    ui.label("/0");
+                }
+                ui.end_row();
+                ui.label("Total Time (ms):");
+                ui.label(format!("{:.2}", self.frame_time.total_time.as_millis()));
+                ui.end_row();
+                ui.label("UI Time (ms):");
+                ui.label(format!("{:.2}", self.frame_time.ui_time.as_millis()));
+                ui.end_row();
+                ui.label("PSX Time (ms):");
+                ui.label(format!("{:.2}", self.frame_time.psx_time.as_millis()));
+                ui.end_row();
+                ui.label("Agent Time (ms):");
+                ui.label(format!("{:.2}", self.frame_time.agent_time.as_millis()));
+                ui.end_row();
+            });
+            ui.horizontal(|_ui| {});
+            ui.horizontal(|ui| {
+                ui.label("Life Stats");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
+            egui::Grid::new("life_stats").show(ui, |ui| {
+                ui.label("Life:");
+                ui.label(format!("{:.4}", self.agent_life_info.life));
+                ui.label(format!("{:.4}", self.opponent_life_info.life));
+                ui.end_row();
+                ui.label("Damage:");
+                ui.label(format!("{:.4}", self.agent_life_info.damage));
+                ui.label(format!("{:.4}", self.opponent_life_info.damage));
+                ui.end_row();
+            });
+            ui.horizontal(|_ui| {});
+            ui.horizontal(|ui| {
+                ui.label("AI Agent");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
+            egui::Grid::new("ai_agent").show(ui, |ui| {
+                ui.label("Total States:");
+                let number_of_states = format!("{}", self.agent.get_number_of_states());
+                ui.label(number_of_states);
+                ui.end_row();
+                ui.label("Revisited States:");
+                let number_of_revisited_states =
+                    format!("{}", self.agent.get_number_of_revisited_states());
+                ui.label(number_of_revisited_states);
+                ui.end_row();
+                ui.label("Previous Next States:");
+                let previous_next_states =
+                    format!("{}", self.agent.get_number_of_previous_next_states());
+                ui.label(previous_next_states);
+            });
+        });
     }
 
     fn process_frame(&mut self) {

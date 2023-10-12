@@ -1,14 +1,14 @@
 use image::RgbImage;
 use log::warn;
+use opencv::core::Mat;
+use opencv::core::NORM_HAMMING;
+use opencv::features2d;
+use opencv::prelude::DescriptorMatcherTrait;
+use opencv::types;
 use rand::Rng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use opencv::core::Mat;
-use opencv::features2d;
-use opencv::types;
-use opencv::core::NORM_HAMMING;
-use opencv::prelude::DescriptorMatcherTrait;
 
 use super::vision;
 
@@ -153,7 +153,9 @@ impl Agent {
             bf_matcher.train();
             let other_descriptors = &other_state.descriptors;
             let mut matches = types::VectorOfDMatch::new();
-            bf_matcher.match_(&other_descriptors, &mut matches, &Mat::default()).unwrap();
+            bf_matcher
+                .match_(&other_descriptors, &mut matches, &Mat::default())
+                .unwrap();
 
             let total_distance: f32 = matches.iter().map(|m| m.distance).sum();
             let average_distance = total_distance / matches.len() as f32;

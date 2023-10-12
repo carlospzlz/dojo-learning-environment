@@ -1,11 +1,11 @@
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::morphology::dilate;
-use std::cmp;
 use opencv::core::{Mat, Scalar, VecN};
 use opencv::features2d;
-use opencv::prelude::{MatTraitConst, MatTraitConstManual, Feature2DTrait};
 use opencv::imgproc;
+use opencv::prelude::{Feature2DTrait, MatTraitConst, MatTraitConstManual};
+use std::cmp;
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -174,7 +174,13 @@ pub fn get_frame_abstraction(
 
     let mut output_image = Mat::default();
     let color = Scalar::new(0.0, 255.0, 0.0, 0.0);
-    features2d::draw_keypoints(&mat, &keypoints, &mut output_image, color, features2d::DrawMatchesFlags::DEFAULT);
+    features2d::draw_keypoints(
+        &mat,
+        &keypoints,
+        &mut output_image,
+        color,
+        features2d::DrawMatchesFlags::DEFAULT,
+    );
 
     let width = output_image.cols() as u32;
     let height = output_image.rows() as u32;
