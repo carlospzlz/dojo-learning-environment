@@ -11,6 +11,10 @@ path = "src/tekken_learning_environment_gui.rs"
 name = "psx_gui"
 path = "src/psx_gui.rs"
 
+[[bin]]
+name = "pose"
+path = "src/pose.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
