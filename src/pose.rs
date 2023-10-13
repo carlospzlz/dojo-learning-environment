@@ -6,7 +6,7 @@ use opencv::{
     dnn::{read_net_from_caffe, Target},
     highgui::{imshow, wait_key},
     imgcodecs::{imread, imwrite},
-    imgproc::{cvt_color, COLOR_BGR2RGB},
+    imgproc::{cvt_color, COLOR_BGR2RGB, resize, INTER_LINEAR},
     prelude::*,
     types::{VectorOfString, VectorOfi32},
 };
@@ -26,14 +26,19 @@ fn main() -> opencv::Result<()> {
     // Load an image for pose estimation
     let image_path = &args[3]; // Replace with the path to your input image
     let mut in_image = imread(image_path, opencv::imgcodecs::IMREAD_COLOR)?;
+    let mut in_image_resized = Mat::default();
+    let ratio = in_image.cols() as f32 / in_image.rows() as f32;
+    let size = Size { width: (368.0 * ratio) as i32, height: 368 };
+    resize(&in_image, &mut in_image_resized, size, 0.0, 0.0, INTER_LINEAR);
+    let in_image = in_image_resized;
     let mut image = Mat::default();
 
     // Convert the image to the appropriate format (BGR to RGB)
-    //cvt_color(&mut in_image, &mut image, COLOR_BGR2RGB, 0)?;
+    cvt_color(&in_image, &mut image, COLOR_BGR2RGB, 0)?;
 
-    imshow("Test", &in_image);
+    imshow("Test", &image);
     wait_key(1000);
-    let image = in_image;
+    //let image = in_image;
 
     // Prepare the image for input to the neural network
     //let image = Mat::new_rows_cols_with_default(10, 10, CV_8UC3, Scalar::all(0.0)).unwrap();
@@ -44,12 +49,12 @@ fn main() -> opencv::Result<()> {
     };
     let blob = opencv::dnn::blob_from_image(
         &image,
-        1.0,
+        1.0 / 255.0,
         size,
         VecN::new(0.0, 0.0, 0.0, 0.0),
         false,
         false,
-        CV_8U,
+        CV_32F,
     )?;
 
     // Set the input for the network
