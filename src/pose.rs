@@ -5,22 +5,22 @@ use opencv::{
     core::{Mat, VecN, Scalar, Size, CV_8U, CV_32F, CV_8UC3},
     dnn::{read_net_from_caffe, Target},
     highgui::{imshow, wait_key},
-    imgcodecs::imread,
+    imgcodecs::{imread, imwrite},
     imgproc::{cvt_color, COLOR_BGR2RGB},
     prelude::*,
-    types::VectorOfString,
+    types::{VectorOfString, VectorOfi32},
 };
 
 fn main() -> opencv::Result<()> {
     // Load the pre-trained human pose estimation model
     let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        panic!("Usage: {} <model> <config> <image>", args[0]);
+    if args.len() < 4 {
+        panic!("Usage: {} <config> <model> <image>", args[0]);
     }
 
-    let model_path = &args[1]; // Replace with the actual path to your model file
-    let config_path = &args[2]; // Replace with the actual path to your config file
-    let mut net = read_net_from_caffe(&model_path, &config_path)?;
+    let config_path = &args[1]; // Replace with the actual path to your config file
+    let model_path = &args[2]; // Replace with the actual path to your model file
+    let mut net = read_net_from_caffe(&config_path, &model_path)?;
     net.set_preferable_target(Target::DNN_TARGET_CPU as i32);
 
     // Load an image for pose estimation
@@ -29,10 +29,11 @@ fn main() -> opencv::Result<()> {
     let mut image = Mat::default();
 
     // Convert the image to the appropriate format (BGR to RGB)
-    cvt_color(&mut in_image, &mut image, COLOR_BGR2RGB, 0)?;
+    //cvt_color(&mut in_image, &mut image, COLOR_BGR2RGB, 0)?;
 
     imshow("Test", &in_image);
     wait_key(1000);
+    let image = in_image;
 
     // Prepare the image for input to the neural network
     //let image = Mat::new_rows_cols_with_default(10, 10, CV_8UC3, Scalar::all(0.0)).unwrap();
@@ -76,17 +77,19 @@ fn main() -> opencv::Result<()> {
             println!("size= {}", mat_size.len());
             println!("{}x{}x{}x{}", mat_size[0], mat_size[1], mat_size[2], mat_size[3]);
             for i in 0..25 {
-                let title = format!("Index {}", i);
+                let title = format!("index_{}", i);
                 unsafe {
-                    let mut mat = Mat::new_rows_cols(mat_size[2], mat_size[3], CV_32F).unwrap();
+                    let mut mat = Mat::new_rows_cols(mat_size[2], mat_size[3], CV_8U).unwrap();
                     for row in 0..mat_size[2] {
                         for col in 0..mat_size[3] {
                             let val = value.at_nd::<f32>(&[0, i, row, col]).unwrap();
-                            *mat.at_2d_mut::<f32>(row, col).unwrap() = *val;
+                            *mat.at_2d_mut::<u8>(row, col).unwrap() = (*val * 255.0) as u8;
                         }
                     }
                     imshow(&title, &mat);
                     wait_key(1000);
+                    let path = "pose_keypoints/".to_owned() + &title + ".png";
+                    imwrite(&path, &mat, &VectorOfi32::new()).expect("Failed to save image");
                 }
             }
         }
