@@ -240,7 +240,7 @@ pub fn apply_thresholds(
     img_out
 }
 
-fn apply_mask(img: &mut RgbImage, mask: &GrayImage) {
+pub fn apply_mask(img: &mut RgbImage, mask: &GrayImage) {
     if (img.width() != img.width()) || (mask.height() != mask.height()) {
         panic!(
             "Image dimensions differ: {}x{}, {}x{}",

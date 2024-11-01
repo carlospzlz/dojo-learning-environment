@@ -210,7 +210,15 @@ impl MyApp {
                         self.blue_thresholds,
                     );
                 }
-                Vision::Pose => img = self.pose.visualize_pose(&img),
+                Vision::Pose => {
+                    img = self.pose.visualize_pose(
+                        &img,
+                        self.red_thresholds,
+                        self.green_thresholds,
+                        self.blue_thresholds,
+                        self.dilate_k,
+                    )
+                }
                 Vision::PSX => (),
             }
 
