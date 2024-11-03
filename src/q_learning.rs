@@ -1,4 +1,4 @@
-use image::RgbImage;
+use image::{Rgb, RgbImage};
 use log::warn;
 use rand::Rng;
 use std::collections::HashMap;
@@ -21,6 +21,8 @@ pub struct Agent {
     blue_thresholds: [u8; 2],
     dilate_k: u8,
     max_mse: f32,
+    histogram1: HashMap<Rgb<u8>, f64>,
+    histogram2: HashMap<Rgb<u8>, f64>,
 }
 
 #[derive(Clone)]
@@ -58,26 +60,41 @@ impl Agent {
             blue_thresholds: [15, 156],
             dilate_k: 6,
             max_mse: 0.012,
+            histogram1: HashMap::new(),
+            histogram2: HashMap::new(),
         }
     }
 
-    pub fn visit_state(&mut self, frame: RgbImage, reward: f32) -> u8 {
+    pub fn visit_state(&mut self, frame_abstraction: Option<RgbImage>, reward: f32) -> u8 {
         // We need a way to recognize equivalent states
         // This is one of the most important/challenging parts
-        let frame_abstraction = vision::get_frame_abstraction(
-            &frame,
-            self.red_thresholds,
-            self.green_thresholds,
-            self.blue_thresholds,
-            self.dilate_k,
-        );
+        //let (frame_abstraction, vision_stages) = vision::get_frame_abstraction(
+        //    &frame,
+        //    self.red_thresholds,
+        //    self.green_thresholds,
+        //    self.blue_thresholds,
+        //    self.dilate_k,
+        //);
         if frame_abstraction.is_none() {
             warn!("Frame abstraction not good enough");
             return 0;
         }
 
         let frame_abstraction = frame_abstraction.unwrap();
+
         let x_limits = vision::get_x_limits(&frame_abstraction);
+        vision::update_histograms(
+            &frame_abstraction,
+            &x_limits,
+            &mut self.histogram1,
+            &mut self.histogram2,
+        );
+        let frame_abstraction = vision::identify_fighters(
+            &frame_abstraction,
+            &x_limits,
+            &self.histogram1,
+            &self.histogram2,
+        );
         let state = State::new(frame_abstraction, x_limits);
 
         // Search or Add

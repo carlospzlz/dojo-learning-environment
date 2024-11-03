@@ -52,6 +52,7 @@ enum Character {
     Paul,
     Yoshimitsu,
     Xiaoyu,
+    Nina,
     Random,
 }
 
@@ -60,7 +61,10 @@ enum Vision {
     PSX,
     Life,
     Agent,
+    Crop,
     Contrast,
+    Mask,
+    Identify,
 }
 
 struct FrameTime {
@@ -89,6 +93,7 @@ struct MyApp {
     system: System,
     frame: RgbImage,
     is_running: bool,
+    last_vision_stages: vision::VisionStages,
     vision: Vision,
     split_view: bool,
     character1: Character,
@@ -120,6 +125,7 @@ impl MyApp {
             system,
             frame: RgbImage::default(),
             is_running: false,
+            last_vision_stages: vision::VisionStages::default(),
             vision: Vision::Agent,
             split_view: true,
             character1: Character::Yoshimitsu,
@@ -159,6 +165,18 @@ impl eframe::App for MyApp {
             // Request repaint
             ctx.request_repaint()
         }
+        else
+        {
+            // Even if not running update vision
+            let (frame_abstraction, vision_stages) = vision::get_frame_abstraction(
+                &self.frame.clone(),
+                self.red_thresholds,
+                self.green_thresholds,
+                self.blue_thresholds,
+                self.dilate_k,
+            );
+            self.last_vision_stages = vision_stages;
+        }
         self.frame_time.total_time = Instant::now() - start_time;
     }
 }
@@ -191,16 +209,12 @@ impl MyApp {
             // Show vision chosen by user
             let mut img = self.frame.clone();
             match self.vision {
-                Vision::Agent => img = self.agent.get_last_state_abstraction(),
                 Vision::Life => img = vision::visualize_life_bars(img),
-                Vision::Contrast => {
-                    img = vision::apply_thresholds(
-                        &img,
-                        self.red_thresholds,
-                        self.green_thresholds,
-                        self.blue_thresholds,
-                    );
-                }
+                Vision::Agent => img = self.agent.get_last_state_abstraction(),
+                Vision::Crop => img = self.last_vision_stages.cropped_frame.clone(),
+                Vision::Contrast => img = self.last_vision_stages.contrast_frame.clone(),
+                Vision::Mask => img = self.last_vision_stages.mask.clone(),
+                Vision::Identify => img = self.last_vision_stages.contrast_frame.clone(),
                 Vision::PSX => (),
             }
 
@@ -333,6 +347,7 @@ impl MyApp {
                         ui.selectable_value(&mut self.character1, Character::Lei, "Lei");
                         ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
                         ui.selectable_value(&mut self.character1, Character::Xiaoyu, "Xiaoyu");
+                        ui.selectable_value(&mut self.character1, Character::Nina, "Nina");
                         ui.selectable_value(&mut self.character1, Character::Random, "Random");
                         ui.selectable_value(
                             &mut self.character1,
@@ -352,6 +367,7 @@ impl MyApp {
                         ui.selectable_value(&mut self.character2, Character::Lei, "Lei");
                         ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
                         ui.selectable_value(&mut self.character2, Character::Xiaoyu, "Xiaoyu");
+                        ui.selectable_value(&mut self.character2, Character::Nina, "Nina");
                         ui.selectable_value(&mut self.character2, Character::Random, "Random");
                         ui.selectable_value(
                             &mut self.character2,
@@ -370,7 +386,10 @@ impl MyApp {
                         ui.selectable_value(&mut self.vision, Vision::PSX, "PSX");
                         ui.selectable_value(&mut self.vision, Vision::Life, "Life");
                         ui.selectable_value(&mut self.vision, Vision::Agent, "Agent");
+                        ui.selectable_value(&mut self.vision, Vision::Crop, "Crop");
                         ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
+                        ui.selectable_value(&mut self.vision, Vision::Mask, "Mask");
+                        ui.selectable_value(&mut self.vision, Vision::Identify, "Identify");
                     });
                 ui.end_row();
                 ui.label("Split View");
@@ -385,6 +404,10 @@ impl MyApp {
                 ui.add(separator.horizontal());
             });
             egui::Grid::new("vision_pipeline").show(ui, |ui| {
+                ui.label("Crop:");
+                ui.end_row();
+                ui.label("Contrast:");
+                ui.end_row();
                 ui.label("Red");
                 ui.horizontal(|ui| {
                     ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
@@ -403,8 +426,12 @@ impl MyApp {
                     ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
                 });
                 ui.end_row();
+                ui.label("Mask:");
+                ui.end_row();
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
+                ui.end_row();
+                ui.label("Identify");
                 ui.end_row();
                 ui.label("MSE");
                 ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
@@ -443,7 +470,9 @@ impl MyApp {
                 if ui.button("Next").clicked() {
                     if !self.is_running {
                         self.process_frame();
-                        ctx.request_repaint();
+                        // Apparently this is not needed, it actually seems
+                        // to produce some unsynching
+                        //ctx.request_repaint();
                     }
                 }
             });
@@ -572,14 +601,19 @@ impl MyApp {
         self.time_from_last_observation += self.frame_time.total_time;
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
         if self.time_from_last_observation > period {
-            self.agent.set_red_thresholds(self.red_thresholds);
-            self.agent.set_green_thresholds(self.green_thresholds);
-            self.agent.set_blue_thresholds(self.blue_thresholds);
-            self.agent.set_dilate_k(self.dilate_k);
-            self.agent.set_max_mse(self.max_mse);
+            // VISION PIPELINE
+            let (frame_abstraction, vision_stages) = vision::get_frame_abstraction(
+                &self.frame.clone(),
+                self.red_thresholds,
+                self.green_thresholds,
+                self.blue_thresholds,
+                self.dilate_k,
+            );
+
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
-            let action = self.agent.visit_state(self.frame.clone(), reward);
+            let action = self.agent.visit_state(frame_abstraction, reward);
+            self.last_vision_stages = vision_stages;
             self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
         }

@@ -2,6 +2,7 @@ use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::morphology::dilate;
 use std::cmp;
+use std::collections::HashMap;
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -19,6 +20,32 @@ impl Default for LifeInfo {
         LifeInfo {
             life: 1.0,
             damage: 0.0,
+        }
+    }
+}
+
+pub struct VisionStages {
+    pub cropped_frame: RgbImage,
+    pub contrast_frame: RgbImage,
+    pub mask: RgbImage,
+}
+
+impl VisionStages {
+    fn new(cropped_frame: RgbImage, contrast_frame: RgbImage, mask: RgbImage) -> Self {
+        Self {
+            cropped_frame,
+            contrast_frame,
+            mask,
+        }
+    }
+}
+
+impl Default for VisionStages {
+    fn default() -> Self {
+        Self {
+            cropped_frame: RgbImage::default(),
+            contrast_frame: RgbImage::default(),
+            mask: RgbImage::default(),
         }
     }
 }
@@ -151,23 +178,43 @@ pub fn get_frame_abstraction(
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
-) -> Option<RgbImage> {
+) -> (Option<RgbImage>, VisionStages) {
     // Remove life bars
-    let frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
-    let mut frame = frame.to_rgb8();
-    let mask = apply_thresholds(&frame, red_thresholds, green_thresholds, blue_thresholds);
-    let mask = DynamicImage::ImageRgb8(mask).to_luma8();
+    let cropped_frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
+    let cropped_frame = cropped_frame.clone().to_rgb8();
+
+    // Apply contrast thresholds
+    let contrast_frame = apply_thresholds(
+        &cropped_frame,
+        red_thresholds,
+        green_thresholds,
+        blue_thresholds,
+    );
+
+    // Make it a mask
+    let mask = DynamicImage::ImageRgb8(contrast_frame.clone()).to_luma8();
     let mask = dilate(&mask, Norm::L1, dilate_k);
+
+    // Vision stages
+    let rgb_mask = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
+    let vision_stages = VisionStages::new(cropped_frame.clone(), contrast_frame, rgb_mask);
+
     // Discard bad abstractions
     if get_detected_amount(&mask) < 0.02 {
         println!("Discarded");
-        return None;
+        return (None, vision_stages);
     }
-    apply_mask(&mut frame, &mask);
+
+    let mut frame_abstraction = cropped_frame;
+    apply_mask(&mut frame_abstraction, &mask);
     //Down-size, so compute time doesn't explode
-    let frame = DynamicImage::ImageRgb8(frame);
-    let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    Some(frame.to_rgb8())
+    //let frame = DynamicImage::ImageRgb8(frame);
+    //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
+    (Some(frame_abstraction), vision_stages)
+}
+
+pub fn crop_frame(frame: RgbImage) {
+    DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
 }
 
 #[allow(dead_code)]
@@ -306,4 +353,53 @@ pub fn draw_border(img: &mut RgbImage) {
         img.put_pixel(0, y, color);
         img.put_pixel(img.width() - 1, y, color);
     }
+}
+
+pub fn update_histograms(
+    img: &RgbImage,
+    x_limits: &(u32, u32),
+    histogram1: &mut HashMap<Rgb<u8>, f64>,
+    histogram2: &mut HashMap<Rgb<u8>, f64>,
+) {
+    let half = x_limits.0 + (x_limits.1 - x_limits.0) / 2 as u32;
+    for x in 0..half {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            *histogram1.entry(*pixel).or_insert(0.0) += 1.0;
+        }
+    }
+    for x in half..img.width() {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            *histogram2.entry(*pixel).or_insert(0.0) += 1.0;
+        }
+    }
+}
+
+pub fn identify_fighters(
+    img: &RgbImage,
+    x_limits: &(u32, u32),
+    histogram1: &HashMap<Rgb<u8>, f64>,
+    histogram2: &HashMap<Rgb<u8>, f64>,
+) -> RgbImage {
+    let mut img_out = RgbImage::new(img.width(), img.height());
+    for x in x_limits.0..x_limits.1 {
+        for y in 0..img.height() {
+            let pixel = img.get_pixel(x, y);
+            if pixel[0] != 0 && pixel[1] != 0 && pixel[2] != 0 {
+                if !histogram1.contains_key(pixel) {
+                    img_out.put_pixel(x, y, Rgb([0, 0, 255]));
+                } else if !histogram2.contains_key(pixel) {
+                    img_out.put_pixel(x, y, Rgb([255, 0, 0]));
+                } else {
+                    if histogram1[pixel] > histogram2[pixel] {
+                        img_out.put_pixel(x, y, Rgb([255, 0, 0]));
+                    } else {
+                        img_out.put_pixel(x, y, Rgb([0, 0, 255]));
+                    }
+                }
+            }
+        }
+    }
+    img_out
 }
