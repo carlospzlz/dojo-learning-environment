@@ -1,6 +1,6 @@
 use image::{DynamicImage, GrayImage, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
-use imageproc::morphology::dilate;
+use imageproc::morphology::{dilate, erode};
 use std::cmp;
 use std::collections::HashMap;
 
@@ -28,14 +28,24 @@ pub struct VisionStages {
     pub cropped_frame: RgbImage,
     pub contrast_frame: RgbImage,
     pub mask: RgbImage,
+    pub centroids_mask: RgbImage,
+    pub masked_frame: RgbImage,
 }
 
 impl VisionStages {
-    fn new(cropped_frame: RgbImage, contrast_frame: RgbImage, mask: RgbImage) -> Self {
+    fn new(
+        cropped_frame: RgbImage,
+        contrast_frame: RgbImage,
+        mask: RgbImage,
+        centroids_mask: RgbImage,
+        masked_frame: RgbImage,
+    ) -> Self {
         Self {
             cropped_frame,
             contrast_frame,
             mask,
+            centroids_mask,
+            masked_frame,
         }
     }
 }
@@ -46,6 +56,8 @@ impl Default for VisionStages {
             cropped_frame: RgbImage::default(),
             contrast_frame: RgbImage::default(),
             mask: RgbImage::default(),
+            centroids_mask: RgbImage::default(),
+            masked_frame: RgbImage::default(),
         }
     }
 }
@@ -178,6 +190,7 @@ pub fn get_frame_abstraction(
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
+    erode_k: u8,
 ) -> (Option<RgbImage>, VisionStages) {
     // Remove life bars
     let cropped_frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
@@ -194,19 +207,43 @@ pub fn get_frame_abstraction(
     // Make it a mask
     let mask = DynamicImage::ImageRgb8(contrast_frame.clone()).to_luma8();
     let mask = dilate(&mask, Norm::L1, dilate_k);
+    let mask = erode(&mask, Norm::L1, erode_k);
+
+    // Centroids
+    let (corner1, corner2) = find_corners(&mask);
+    let (centroid1, centroid2) = find_centroids(&mask, corner1, corner2);
+    let mut rgb_centroids_mask = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
+    draw_centroids(
+        &mut rgb_centroids_mask,
+        corner1,
+        corner2,
+        centroid1,
+        centroid2,
+    );
+
+    // Apply mask
+    let mut masked_frame = cropped_frame.clone();
+    apply_mask(&mut masked_frame, &mask);
 
     // Vision stages
-    let rgb_mask = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
-    let vision_stages = VisionStages::new(cropped_frame.clone(), contrast_frame, rgb_mask);
+    let rgb_mask = DynamicImage::ImageLuma8(mask).to_rgb8();
+    let vision_stages = VisionStages::new(
+        cropped_frame,
+        contrast_frame,
+        rgb_mask,
+        rgb_centroids_mask,
+        masked_frame.clone(),
+    );
+
+    // Frame abstraction
+    let frame_abstraction = masked_frame;
 
     // Discard bad abstractions
-    if get_detected_amount(&mask) < 0.02 {
-        println!("Discarded");
-        return (None, vision_stages);
-    }
+    //if get_detected_amount(&mask) < 0.02 {
+    //    println!("Discarded");
+    //    return (None, vision_stages);
+    //}
 
-    let mut frame_abstraction = cropped_frame;
-    apply_mask(&mut frame_abstraction, &mask);
     //Down-size, so compute time doesn't explode
     //let frame = DynamicImage::ImageRgb8(frame);
     //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
@@ -306,6 +343,120 @@ fn apply_mask(img: &mut RgbImage, mask: &GrayImage) {
             let b = (pixel[2] as f32 * multiplier) as u8;
             img.put_pixel(x, y, Rgb([r, g, b]));
         }
+    }
+}
+
+fn find_corners(img: &GrayImage) -> ((u32, u32), (u32, u32)) {
+    let mut corner1 = (img.width(), img.height());
+    let mut corner2 = (0, 0);
+    for x in 0..img.width() {
+        for y in 0..img.height() {
+            if img.get_pixel(x, y)[0] != 0 {
+                if x < corner1.0 {
+                    corner1.0 = x;
+                }
+                if y < corner1.1 {
+                    corner1.1 = y;
+                }
+                if x > corner2.0 {
+                    corner2.0 = x;
+                }
+                if y > corner2.1 {
+                    corner2.1 = y;
+                }
+            }
+        }
+    }
+
+    (corner1, corner2)
+}
+
+fn find_centroids(
+    img: &GrayImage,
+    corner1: (u32, u32),
+    corner2: (u32, u32),
+) -> ((u32, u32), (u32, u32)) {
+    let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
+    let half_y = corner1.1 + (corner2.1 - corner1.1) / 2 as u32;
+
+    // Centroid1
+    let mut centroid1 = (0, 0);
+    let mut max_count = 0;
+    for x in corner1.0..half_x {
+        let mut count = 0;
+        for y in corner1.1..corner2.1 {
+            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+        }
+        if count > max_count {
+            centroid1.0 = x;
+            max_count = count;
+        }
+    }
+    let mut max_count = 0;
+    for y in corner1.1..half_y {
+        let mut count = 0;
+        for x in corner1.0..half_x {
+            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+        }
+        if count > max_count {
+            centroid1.1 = y;
+            max_count = count;
+        }
+    }
+
+    // Centroid2
+    let mut centroid2 = (0, 0);
+    let mut max_count = 0;
+    for x in half_x..corner2.0 {
+        let mut count = 0;
+        for y in corner1.1..corner2.1 {
+            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+        }
+        if count > max_count {
+            centroid2.0 = x;
+            max_count = count;
+        }
+    }
+    let mut max_count = 0;
+    for y in half_y..corner2.1 {
+        let mut count = 0;
+        for x in half_x..corner2.0 {
+            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+        }
+        if count > max_count {
+            centroid2.1 = y;
+            max_count = count;
+        }
+    }
+
+    (centroid1, centroid2)
+}
+
+fn draw_centroids(
+    img: &mut RgbImage,
+    corner1: (u32, u32),
+    corner2: (u32, u32),
+    centroid1: (u32, u32),
+    centroid2: (u32, u32),
+) {
+    // Green border
+    for x in corner1.0..corner2.0 {
+        img.put_pixel(x, corner1.1, Rgb([0, 255, 0]));
+        img.put_pixel(x, corner2.1, Rgb([0, 255, 0]));
+    }
+    for y in corner1.1..corner2.1 {
+        img.put_pixel(corner1.0, y, Rgb([0, 255, 0]));
+        img.put_pixel(corner2.0, y, Rgb([0, 255, 0]));
+    }
+
+    // Centroids
+    for x in corner1.0..corner2.0 {
+        img.put_pixel(x, centroid1.1, Rgb([255, 0, 0]));
+        img.put_pixel(x, centroid2.1, Rgb([0, 0, 255]));
+    }
+    for y in corner1.1..corner2.1 {
+        img.put_pixel(centroid1.0, y, Rgb([255, 0, 0]));
+        img.put_pixel(centroid2.0, y, Rgb([0, 0, 255]));
     }
 }
 

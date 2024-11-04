@@ -64,6 +64,8 @@ enum Vision {
     Crop,
     Contrast,
     Mask,
+    Centroids,
+    Masked,
     Identify,
 }
 
@@ -112,6 +114,7 @@ struct MyApp {
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
+    erode_k: u8,
     max_mse: f32,
 }
 
@@ -143,7 +146,8 @@ impl MyApp {
             red_thresholds: [0, 173],
             green_thresholds: [15, 165],
             blue_thresholds: [15, 156],
-            dilate_k: 6,
+            dilate_k: 11,
+            erode_k: 9,
             max_mse: 0.04,
         }
     }
@@ -164,9 +168,7 @@ impl eframe::App for MyApp {
 
             // Request repaint
             ctx.request_repaint()
-        }
-        else
-        {
+        } else {
             // Even if not running update vision
             let (frame_abstraction, vision_stages) = vision::get_frame_abstraction(
                 &self.frame.clone(),
@@ -174,6 +176,7 @@ impl eframe::App for MyApp {
                 self.green_thresholds,
                 self.blue_thresholds,
                 self.dilate_k,
+                self.erode_k,
             );
             self.last_vision_stages = vision_stages;
         }
@@ -214,7 +217,9 @@ impl MyApp {
                 Vision::Crop => img = self.last_vision_stages.cropped_frame.clone(),
                 Vision::Contrast => img = self.last_vision_stages.contrast_frame.clone(),
                 Vision::Mask => img = self.last_vision_stages.mask.clone(),
-                Vision::Identify => img = self.last_vision_stages.contrast_frame.clone(),
+                Vision::Centroids => img = self.last_vision_stages.centroids_mask.clone(),
+                Vision::Masked => img = self.last_vision_stages.masked_frame.clone(),
+                Vision::Identify => img = self.last_vision_stages.masked_frame.clone(),
                 Vision::PSX => (),
             }
 
@@ -389,6 +394,8 @@ impl MyApp {
                         ui.selectable_value(&mut self.vision, Vision::Crop, "Crop");
                         ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
                         ui.selectable_value(&mut self.vision, Vision::Mask, "Mask");
+                        ui.selectable_value(&mut self.vision, Vision::Centroids, "Centroids");
+                        ui.selectable_value(&mut self.vision, Vision::Masked, "Masked");
                         ui.selectable_value(&mut self.vision, Vision::Identify, "Identify");
                     });
                 ui.end_row();
@@ -430,6 +437,9 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
+                ui.end_row();
+                ui.label("Erode");
+                ui.add(egui::Slider::new(&mut self.erode_k, 0..=20));
                 ui.end_row();
                 ui.label("Identify");
                 ui.end_row();
@@ -608,6 +618,7 @@ impl MyApp {
                 self.green_thresholds,
                 self.blue_thresholds,
                 self.dilate_k,
+                self.erode_k,
             );
 
             // REWARD
