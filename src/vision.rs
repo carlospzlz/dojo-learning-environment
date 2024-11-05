@@ -228,6 +228,9 @@ pub fn get_frame_abstraction(
         centroid2,
     );
 
+    let (char1_corner1, char1_corner2) = enclose_char1(&mask, &centroid1, &corner1, &corner2);
+    let (char2_corner1, char2_corner2) = enclose_char2(&mask, &centroid2, &corner1, &corner2);
+
     // Grow char1 and char2 (using contrast thresholds)
     // Compare them
     // Are they different?
@@ -624,4 +627,26 @@ pub fn identify_fighters_by_histogram(
         }
     }
     img_out
+}
+
+fn enclose_char1(
+    img: &GrayImage,
+    centroid: &(u32, u32),
+    corner1: &(u32, u32),
+    corner2: &(u32, u32),
+) -> ((u32, u32), (u32, u32)) {
+    // Right bound
+    let mut right_bound = corner2.0;
+    for x in centroid.0..corner2.0 {
+        let mut empty_column = false;
+        for y in corner1.1..corner2.1 {
+            empty_column = img.get_pixel(x, y)[0] == 0;
+            if !empty_column {
+                break;
+            }
+        }
+        if empty_column == 0 {
+            return x;
+        }
+    }
 }
