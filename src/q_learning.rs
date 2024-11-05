@@ -1,4 +1,4 @@
-use image::{Rgb, RgbImage};
+use image::RgbImage;
 use log::warn;
 use rand::Rng;
 use std::collections::HashMap;
@@ -21,8 +21,6 @@ pub struct Agent {
     blue_thresholds: [u8; 2],
     dilate_k: u8,
     max_mse: f32,
-    histogram1: HashMap<Rgb<u8>, f64>,
-    histogram2: HashMap<Rgb<u8>, f64>,
 }
 
 #[derive(Clone)]
@@ -60,8 +58,6 @@ impl Agent {
             blue_thresholds: [15, 156],
             dilate_k: 6,
             max_mse: 0.012,
-            histogram1: HashMap::new(),
-            histogram2: HashMap::new(),
         }
     }
 
@@ -81,20 +77,7 @@ impl Agent {
         }
 
         let frame_abstraction = frame_abstraction.unwrap();
-
         let x_limits = vision::get_x_limits(&frame_abstraction);
-        vision::update_histograms(
-            &frame_abstraction,
-            &x_limits,
-            &mut self.histogram1,
-            &mut self.histogram2,
-        );
-        let frame_abstraction = vision::identify_fighters(
-            &frame_abstraction,
-            &x_limits,
-            &self.histogram1,
-            &self.histogram2,
-        );
         let state = State::new(frame_abstraction, x_limits);
 
         // Search or Add
@@ -203,7 +186,7 @@ impl Agent {
         if let Some(index) = self.previous_index {
             let mut frame = self.states[index].frame_abstraction.clone();
             let x_limits = self.states[index].x_limits;
-            vision::draw_x_limits(&mut frame, x_limits);
+            //vision::draw_x_limits(&mut frame, x_limits);
             if index < self.states.len() - 1 {
                 vision::draw_border(&mut frame);
             }

@@ -30,6 +30,7 @@ pub struct VisionStages {
     pub mask: RgbImage,
     pub centroids_mask: RgbImage,
     pub masked_frame: RgbImage,
+    pub identified_frame: RgbImage,
 }
 
 impl VisionStages {
@@ -39,6 +40,7 @@ impl VisionStages {
         mask: RgbImage,
         centroids_mask: RgbImage,
         masked_frame: RgbImage,
+        identified_frame: RgbImage,
     ) -> Self {
         Self {
             cropped_frame,
@@ -46,6 +48,7 @@ impl VisionStages {
             mask,
             centroids_mask,
             masked_frame,
+            identified_frame,
         }
     }
 }
@@ -58,6 +61,7 @@ impl Default for VisionStages {
             mask: RgbImage::default(),
             centroids_mask: RgbImage::default(),
             masked_frame: RgbImage::default(),
+            identified_frame: RgbImage::default(),
         }
     }
 }
@@ -191,6 +195,9 @@ pub fn get_frame_abstraction(
     blue_thresholds: [u8; 2],
     dilate_k: u8,
     erode_k: u8,
+    ratio_threshold: f32,
+    histogram1: &mut HashMap<Rgb<u8>, f64>,
+    histogram2: &mut HashMap<Rgb<u8>, f64>,
 ) -> (Option<RgbImage>, VisionStages) {
     // Remove life bars
     let cropped_frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
@@ -221,9 +228,49 @@ pub fn get_frame_abstraction(
         centroid2,
     );
 
+    // Grow char1 and char2 (using contrast thresholds)
+    // Compare them
+    // Are they different?
+    // YES
+    //  `-> Check which histogram matches better
+    //  `-> character recognized
+    //  `-> Update histogram
+    // NO
+    // they can't be distinguished
+    //  `-> Grow from middle using histogram
+    //  `-> Smooth?
+    //  `-> Scale down
+
+    // Track fighters separetely
+    // previous histogram
+    // histograms are important
+
     // Apply mask
     let mut masked_frame = cropped_frame.clone();
     apply_mask(&mut masked_frame, &mask);
+
+    // Identify fighters
+    let ratio = if (corner2.1 - corner1.1) > 0 {
+        Some((corner2.0 - corner1.0) as f32 / (corner2.1 - corner1.1) as f32)
+    } else {
+        None
+    };
+    let identified_frame = if let Some(ratio) = ratio {
+        if ratio > ratio_threshold {
+            update_histograms(&masked_frame, &corner1, &corner2, histogram1, histogram2);
+            identify_fighters_by_side(&mask, &corner1, &corner2)
+        } else {
+            identify_fighters_by_histogram(
+                &masked_frame,
+                &corner1,
+                &corner2,
+                histogram1,
+                histogram2,
+            )
+        }
+    } else {
+        RgbImage::default()
+    };
 
     // Vision stages
     let rgb_mask = DynamicImage::ImageLuma8(mask).to_rgb8();
@@ -232,11 +279,11 @@ pub fn get_frame_abstraction(
         contrast_frame,
         rgb_mask,
         rgb_centroids_mask,
-        masked_frame.clone(),
+        masked_frame,
+        identified_frame.clone(),
     );
 
-    // Frame abstraction
-    let frame_abstraction = masked_frame;
+    let frame_abstraction = identified_frame;
 
     // Discard bad abstractions
     //if get_detected_amount(&mask) < 0.02 {
@@ -377,7 +424,6 @@ fn find_centroids(
     corner2: (u32, u32),
 ) -> ((u32, u32), (u32, u32)) {
     let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
-    let half_y = corner1.1 + (corner2.1 - corner1.1) / 2 as u32;
 
     // Centroid1
     let mut centroid1 = (0, 0);
@@ -393,7 +439,7 @@ fn find_centroids(
         }
     }
     let mut max_count = 0;
-    for y in corner1.1..half_y {
+    for y in corner1.1..corner2.1 {
         let mut count = 0;
         for x in corner1.0..half_x {
             count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
@@ -418,7 +464,7 @@ fn find_centroids(
         }
     }
     let mut max_count = 0;
-    for y in half_y..corner2.1 {
+    for y in corner1.1..corner2.1 {
         let mut count = 0;
         for x in half_x..corner2.0 {
             count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
@@ -508,36 +554,61 @@ pub fn draw_border(img: &mut RgbImage) {
 
 pub fn update_histograms(
     img: &RgbImage,
-    x_limits: &(u32, u32),
+    corner1: &(u32, u32),
+    corner2: &(u32, u32),
     histogram1: &mut HashMap<Rgb<u8>, f64>,
     histogram2: &mut HashMap<Rgb<u8>, f64>,
 ) {
-    let half = x_limits.0 + (x_limits.1 - x_limits.0) / 2 as u32;
-    for x in 0..half {
-        for y in 0..img.height() {
+    let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
+    for x in corner1.0..half_x {
+        for y in corner1.1..corner2.1 {
             let pixel = img.get_pixel(x, y);
             *histogram1.entry(*pixel).or_insert(0.0) += 1.0;
         }
     }
-    for x in half..img.width() {
-        for y in 0..img.height() {
+    for x in half_x..corner2.0 {
+        for y in corner1.1..corner2.1 {
             let pixel = img.get_pixel(x, y);
             *histogram2.entry(*pixel).or_insert(0.0) += 1.0;
         }
     }
 }
 
-pub fn identify_fighters(
+pub fn identify_fighters_by_side(
+    mask: &GrayImage,
+    corner1: &(u32, u32),
+    corner2: &(u32, u32),
+) -> RgbImage {
+    let mut img_out = RgbImage::new(mask.width(), mask.height());
+    let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
+    for x in corner1.0..half_x {
+        for y in corner1.1..corner2.1 {
+            if mask.get_pixel(x, y)[0] > 0 {
+                img_out.put_pixel(x, y, Rgb([255, 0, 0]));
+            }
+        }
+    }
+    for x in half_x..corner2.0 {
+        for y in corner1.1..corner2.1 {
+            if mask.get_pixel(x, y)[0] > 0 {
+                img_out.put_pixel(x, y, Rgb([0, 0, 255]));
+            }
+        }
+    }
+    img_out
+}
+pub fn identify_fighters_by_histogram(
     img: &RgbImage,
-    x_limits: &(u32, u32),
+    corner1: &(u32, u32),
+    corner2: &(u32, u32),
     histogram1: &HashMap<Rgb<u8>, f64>,
     histogram2: &HashMap<Rgb<u8>, f64>,
 ) -> RgbImage {
     let mut img_out = RgbImage::new(img.width(), img.height());
-    for x in x_limits.0..x_limits.1 {
-        for y in 0..img.height() {
+    for x in corner1.0..corner2.0 {
+        for y in corner1.1..corner2.1 {
             let pixel = img.get_pixel(x, y);
-            if pixel[0] != 0 && pixel[1] != 0 && pixel[2] != 0 {
+            if pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 {
                 if !histogram1.contains_key(pixel) {
                     img_out.put_pixel(x, y, Rgb([0, 0, 255]));
                 } else if !histogram2.contains_key(pixel) {

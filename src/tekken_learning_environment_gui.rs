@@ -1,6 +1,7 @@
 use egui::{Color32, ColorImage};
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::Read;
@@ -116,6 +117,9 @@ struct MyApp {
     dilate_k: u8,
     erode_k: u8,
     max_mse: f32,
+    histogram1: HashMap<Rgb<u8>, f64>,
+    histogram2: HashMap<Rgb<u8>, f64>,
+    ratio_threshold: f32,
 }
 
 impl MyApp {
@@ -149,6 +153,9 @@ impl MyApp {
             dilate_k: 11,
             erode_k: 9,
             max_mse: 0.04,
+            histogram1: HashMap::new(),
+            histogram2: HashMap::new(),
+            ratio_threshold: 0.95,
         }
     }
 }
@@ -177,6 +184,9 @@ impl eframe::App for MyApp {
                 self.blue_thresholds,
                 self.dilate_k,
                 self.erode_k,
+                self.ratio_threshold,
+                &mut self.histogram1.clone(),
+                &mut self.histogram2.clone(),
             );
             self.last_vision_stages = vision_stages;
         }
@@ -219,7 +229,7 @@ impl MyApp {
                 Vision::Mask => img = self.last_vision_stages.mask.clone(),
                 Vision::Centroids => img = self.last_vision_stages.centroids_mask.clone(),
                 Vision::Masked => img = self.last_vision_stages.masked_frame.clone(),
-                Vision::Identify => img = self.last_vision_stages.masked_frame.clone(),
+                Vision::Identify => img = self.last_vision_stages.identified_frame.clone(),
                 Vision::PSX => (),
             }
 
@@ -443,6 +453,9 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Identify");
                 ui.end_row();
+                ui.label("Ratio");
+                ui.add(egui::Slider::new(&mut self.ratio_threshold, 0.0..=3.0).max_decimals(3));
+                ui.end_row();
                 ui.label("MSE");
                 ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
             });
@@ -619,6 +632,9 @@ impl MyApp {
                 self.blue_thresholds,
                 self.dilate_k,
                 self.erode_k,
+                self.ratio_threshold,
+                &mut self.histogram1,
+                &mut self.histogram2,
             );
 
             // REWARD
