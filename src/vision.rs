@@ -1,8 +1,8 @@
-use image::{DynamicImage, GrayImage, Rgb, RgbImage};
+use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
 use imageproc::morphology::{dilate, erode};
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 const LIFE_BAR_Y: u32 = 54;
 // Life bar seems to be 152 pixels wide
@@ -228,8 +228,9 @@ pub fn get_frame_abstraction(
         centroid2,
     );
 
-    let (char1_corner1, char1_corner2) = enclose_char1(&mask, &centroid1, &corner1, &corner2);
-    let (char2_corner1, char2_corner2) = enclose_char2(&mask, &centroid2, &corner1, &corner2);
+    // Grow and enclose characters
+    let (mask, char1_corner1, char1_corner2) = grow_region(mask, &centroid1, &corner1, &corner2);
+    let (mask, char2_corner1, char2_corner2) = grow_region(mask, &centroid2, &corner1, &corner2);
 
     // Grow char1 and char2 (using contrast thresholds)
     // Compare them
@@ -629,24 +630,62 @@ pub fn identify_fighters_by_histogram(
     img_out
 }
 
-fn enclose_char1(
-    img: &GrayImage,
+fn grow_region(
+    mask: GrayImage,
     centroid: &(u32, u32),
     corner1: &(u32, u32),
     corner2: &(u32, u32),
-) -> ((u32, u32), (u32, u32)) {
-    // Right bound
-    let mut right_bound = corner2.0;
-    for x in centroid.0..corner2.0 {
-        let mut empty_column = false;
-        for y in corner1.1..corner2.1 {
-            empty_column = img.get_pixel(x, y)[0] == 0;
-            if !empty_column {
-                break;
+) -> (GrayImage, (u32, u32), (u32, u32)) {
+    let mut mask_out = GrayImage::new(mask.width(), mask.height());
+    let mut region_corner1 = (mask.width(), mask.height());
+    let mut region_corner2 = (0, 0);
+
+    if mask.is_empty() {
+        return (mask_out, region_corner1, region_corner2);
+    }
+
+    let mut queue = VecDeque::new();
+    let mut visited = vec![vec![false; mask.height() as usize]; mask.width() as usize];
+    queue.push_back(centroid.clone());
+
+    // Process queue
+    while let Some((x, y)) = queue.pop_front() {
+        // Mask
+        mask_out.put_pixel(x, y, Luma([255u8]));
+        // Bounding box
+        if x < region_corner1.0 {
+            region_corner1.0 = x;
+        }
+        if y < region_corner1.1 {
+            region_corner1.1 = y;
+        }
+        if x > region_corner2.0 {
+            region_corner2.0 = x;
+        }
+        if y > region_corner2.1 {
+            region_corner2.1 = y;
+        }
+
+        // Explore the 4-connected neighbors (up, down, left, right)
+        for (dx, dy) in [
+            (-1, -1),
+            (0, -1),
+            (1, -1),
+            (-1, 0),
+            (1, 0),
+            (-1, 1),
+            (0, 1),
+            (1, 1),
+        ] {
+            let (nx, ny) = ((x as i32 + dx) as u32, (y as i32 + dy) as u32);
+            if nx >= corner1.0 && ny >= corner1.1 && nx < corner2.0 && ny < corner2.1 {
+                if !visited[nx as usize][ny as usize] && mask.get_pixel(nx, ny)[0] > 0 {
+                    visited[nx as usize][ny as usize] = true;
+                    queue.push_back((nx, ny));
+                }
             }
         }
-        if empty_column == 0 {
-            return x;
-        }
     }
+
+    (mask_out, region_corner1, region_corner2)
 }
