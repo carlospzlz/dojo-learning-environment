@@ -1,5 +1,6 @@
 use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
+use imageproc::filter::median_filter;
 use imageproc::morphology::{dilate, erode};
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
@@ -29,8 +30,10 @@ pub struct VisionStages {
     pub contrast_frame: RgbImage,
     pub mask: RgbImage,
     pub centroids_mask: RgbImage,
+    pub chars_mask: RgbImage,
     pub masked_frame: RgbImage,
     pub identified_frame: RgbImage,
+    pub segmented_frame: RgbImage,
 }
 
 impl VisionStages {
@@ -39,16 +42,20 @@ impl VisionStages {
         contrast_frame: RgbImage,
         mask: RgbImage,
         centroids_mask: RgbImage,
+        chars_mask: RgbImage,
         masked_frame: RgbImage,
         identified_frame: RgbImage,
+        segmented_frame: RgbImage,
     ) -> Self {
         Self {
             cropped_frame,
             contrast_frame,
             mask,
             centroids_mask,
+            chars_mask,
             masked_frame,
             identified_frame,
+            segmented_frame,
         }
     }
 }
@@ -60,8 +67,26 @@ impl Default for VisionStages {
             contrast_frame: RgbImage::default(),
             mask: RgbImage::default(),
             centroids_mask: RgbImage::default(),
+            chars_mask: RgbImage::default(),
             masked_frame: RgbImage::default(),
             identified_frame: RgbImage::default(),
+            segmented_frame: RgbImage::default(),
+        }
+    }
+}
+
+struct Character {
+    mask: GrayImage,
+    corner1: (u32, u32),
+    corner2: (u32, u32),
+}
+
+impl Character {
+    fn new(mask: GrayImage, corner1: (u32, u32), corner2: (u32, u32)) -> Self {
+        Self {
+            mask,
+            corner1,
+            corner2,
         }
     }
 }
@@ -195,7 +220,7 @@ pub fn get_frame_abstraction(
     blue_thresholds: [u8; 2],
     dilate_k: u8,
     erode_k: u8,
-    ratio_threshold: f32,
+    filter_radius: u32,
     histogram1: &mut HashMap<Rgb<u8>, f64>,
     histogram2: &mut HashMap<Rgb<u8>, f64>,
 ) -> (Option<RgbImage>, VisionStages) {
@@ -229,8 +254,43 @@ pub fn get_frame_abstraction(
     );
 
     // Grow and enclose characters
-    let (mask, char1_corner1, char1_corner2) = grow_region(mask, &centroid1, &corner1, &corner2);
-    let (mask, char2_corner1, char2_corner2) = grow_region(mask, &centroid2, &corner1, &corner2);
+    let char1 = grow_region(&mask, &centroid1, &corner1, &corner2);
+    let char2 = grow_region(&mask, &centroid2, &corner1, &corner2);
+    let chars_mask = merge_chars_masks(&char1.mask, &char2.mask);
+    let rgb_chars_mask = DynamicImage::ImageLuma8(chars_mask.clone()).to_rgb8();
+
+    // Branching depending on how close characters are
+    let disjoint = (char1.corner2.0 < char2.corner1.0)
+        || (char1.corner1.0 > char2.corner2.0)
+        || (char1.corner2.1 < char2.corner1.1)
+        || (char1.corner1.1 > char2.corner2.1);
+
+    let identified_frame = if disjoint {
+        draw_framed_disjoint_chars(&char1, &char2)
+    } else {
+        draw_framed_overlapped_chars(&char1, &char2)
+    };
+
+    // Apply mask
+    let mut masked_frame = cropped_frame.clone();
+    apply_mask(&mut masked_frame, &chars_mask);
+
+    // Final segmentation
+    if disjoint {
+        update_histograms(&masked_frame, &corner1, &corner2, histogram1, histogram2);
+    }
+    let segmented_frame = if disjoint {
+        draw_disjoint_chars(&char1, &char2)
+    } else {
+        let segmented_frame = segment_overlapped_chars_by_histogram(
+            &masked_frame,
+            &corner1,
+            &corner2,
+            histogram1,
+            histogram2,
+        );
+        median_filter(&segmented_frame, filter_radius, filter_radius)
+    };
 
     // Grow char1 and char2 (using contrast thresholds)
     // Compare them
@@ -249,32 +309,28 @@ pub fn get_frame_abstraction(
     // previous histogram
     // histograms are important
 
-    // Apply mask
-    let mut masked_frame = cropped_frame.clone();
-    apply_mask(&mut masked_frame, &mask);
-
-    // Identify fighters
-    let ratio = if (corner2.1 - corner1.1) > 0 {
-        Some((corner2.0 - corner1.0) as f32 / (corner2.1 - corner1.1) as f32)
-    } else {
-        None
-    };
-    let identified_frame = if let Some(ratio) = ratio {
-        if ratio > ratio_threshold {
-            update_histograms(&masked_frame, &corner1, &corner2, histogram1, histogram2);
-            identify_fighters_by_side(&mask, &corner1, &corner2)
-        } else {
-            identify_fighters_by_histogram(
-                &masked_frame,
-                &corner1,
-                &corner2,
-                histogram1,
-                histogram2,
-            )
-        }
-    } else {
-        RgbImage::default()
-    };
+    //// Identify fighters
+    //let ratio = if (corner2.1 - corner1.1) > 0 {
+    //    Some((corner2.0 - corner1.0) as f32 / (corner2.1 - corner1.1) as f32)
+    //} else {
+    //    None
+    //};
+    //let identified_frame = if let Some(ratio) = ratio {
+    //    if ratio > ratio_threshold {
+    //        update_histograms(&masked_frame, &corner1, &corner2, histogram1, histogram2);
+    //        identify_fighters_by_side(&mask, &corner1, &corner2)
+    //    } else {
+    //        identify_fighters_by_histogram(
+    //            &masked_frame,
+    //            &corner1,
+    //            &corner2,
+    //            histogram1,
+    //            histogram2,
+    //        )
+    //    }
+    //} else {
+    //    RgbImage::default()
+    //};
 
     // Vision stages
     let rgb_mask = DynamicImage::ImageLuma8(mask).to_rgb8();
@@ -283,11 +339,13 @@ pub fn get_frame_abstraction(
         contrast_frame,
         rgb_mask,
         rgb_centroids_mask,
+        rgb_chars_mask,
         masked_frame,
-        identified_frame.clone(),
+        identified_frame,
+        segmented_frame.clone(),
     );
 
-    let frame_abstraction = identified_frame;
+    let frame_abstraction = segmented_frame;
 
     // Discard bad abstractions
     //if get_detected_amount(&mask) < 0.02 {
@@ -398,7 +456,7 @@ fn apply_mask(img: &mut RgbImage, mask: &GrayImage) {
 }
 
 fn find_corners(img: &GrayImage) -> ((u32, u32), (u32, u32)) {
-    let mut corner1 = (img.width(), img.height());
+    let mut corner1 = (img.width() - 1, img.height() - 1);
     let mut corner2 = (0, 0);
     for x in 0..img.width() {
         for y in 0..img.height() {
@@ -601,47 +659,19 @@ pub fn identify_fighters_by_side(
     }
     img_out
 }
-pub fn identify_fighters_by_histogram(
-    img: &RgbImage,
-    corner1: &(u32, u32),
-    corner2: &(u32, u32),
-    histogram1: &HashMap<Rgb<u8>, f64>,
-    histogram2: &HashMap<Rgb<u8>, f64>,
-) -> RgbImage {
-    let mut img_out = RgbImage::new(img.width(), img.height());
-    for x in corner1.0..corner2.0 {
-        for y in corner1.1..corner2.1 {
-            let pixel = img.get_pixel(x, y);
-            if pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 {
-                if !histogram1.contains_key(pixel) {
-                    img_out.put_pixel(x, y, Rgb([0, 0, 255]));
-                } else if !histogram2.contains_key(pixel) {
-                    img_out.put_pixel(x, y, Rgb([255, 0, 0]));
-                } else {
-                    if histogram1[pixel] > histogram2[pixel] {
-                        img_out.put_pixel(x, y, Rgb([255, 0, 0]));
-                    } else {
-                        img_out.put_pixel(x, y, Rgb([0, 0, 255]));
-                    }
-                }
-            }
-        }
-    }
-    img_out
-}
 
 fn grow_region(
-    mask: GrayImage,
+    mask: &GrayImage,
     centroid: &(u32, u32),
     corner1: &(u32, u32),
     corner2: &(u32, u32),
-) -> (GrayImage, (u32, u32), (u32, u32)) {
+) -> Character {
     let mut mask_out = GrayImage::new(mask.width(), mask.height());
     let mut region_corner1 = (mask.width(), mask.height());
     let mut region_corner2 = (0, 0);
 
     if mask.is_empty() {
-        return (mask_out, region_corner1, region_corner2);
+        return Character::new(mask_out, region_corner1, region_corner2);
     }
 
     let mut queue = VecDeque::new();
@@ -687,5 +717,133 @@ fn grow_region(
         }
     }
 
-    (mask_out, region_corner1, region_corner2)
+    Character::new(mask_out, region_corner1, region_corner2)
+}
+
+fn merge_chars_masks(char1_mask: &GrayImage, char2_mask: &GrayImage) -> GrayImage {
+    let mut mask = GrayImage::new(char1_mask.width(), char2_mask.height());
+    for (x, y, pixel) in mask.enumerate_pixels_mut() {
+        let pixel1 = char1_mask.get_pixel(x, y)[0];
+        let pixel2 = char2_mask.get_pixel(x, y)[0];
+        let value = if pixel1 > 0 || pixel2 > 0 { 255 } else { 0 };
+        *pixel = Luma([value]);
+    }
+    mask
+}
+
+fn draw_framed_disjoint_chars(char1: &Character, char2: &Character) -> RgbImage {
+    let mut img = RgbImage::new(char1.mask.width(), char1.mask.height());
+
+    // Draw char1 in red
+    for (x, y, pixel) in char1.mask.enumerate_pixels() {
+        if pixel[0] > 0 {
+            img.put_pixel(x, y, Rgb([255, 0, 0]));
+        }
+    }
+    for x in char1.corner1.0..char1.corner2.0 {
+        img.put_pixel(x, char1.corner1.1, Rgb([255, 0, 0]));
+        img.put_pixel(x, char1.corner2.1, Rgb([255, 0, 0]));
+    }
+    for y in char1.corner1.1..char1.corner2.1 {
+        img.put_pixel(char1.corner1.0, y, Rgb([255, 0, 0]));
+        img.put_pixel(char1.corner2.0, y, Rgb([255, 0, 0]));
+    }
+
+    // Draw char2 in blue
+    for (x, y, pixel) in char2.mask.enumerate_pixels() {
+        if pixel[0] > 0 {
+            img.put_pixel(x, y, Rgb([0, 0, 255]));
+        }
+    }
+    for x in char2.corner1.0..char2.corner2.0 {
+        img.put_pixel(x, char2.corner1.1, Rgb([0, 0, 255]));
+        img.put_pixel(x, char2.corner2.1, Rgb([0, 0, 255]));
+    }
+    for y in char2.corner1.1..char2.corner2.1 {
+        img.put_pixel(char2.corner1.0, y, Rgb([0, 0, 255]));
+        img.put_pixel(char2.corner2.0, y, Rgb([0, 0, 255]));
+    }
+
+    img
+}
+
+fn draw_framed_overlapped_chars(char1: &Character, char2: &Character) -> RgbImage {
+    let mut img = RgbImage::new(char1.mask.width(), char1.mask.height());
+
+    let corner1 = (
+        cmp::min(char1.corner1.0, char2.corner1.0),
+        cmp::min(char1.corner1.1, char2.corner1.1),
+    );
+    let corner2 = (
+        cmp::max(char1.corner2.0, char2.corner2.0),
+        cmp::max(char1.corner2.1, char2.corner2.1),
+    );
+
+    // Draw whole thing in purple
+    for x in corner1.0..corner2.0 {
+        for y in corner1.1..corner2.1 {
+            if char1.mask.get_pixel(x, y)[0] > 0 || char2.mask.get_pixel(x, y)[0] > 0 {
+                img.put_pixel(x, y, Rgb([255, 0, 255]));
+            }
+        }
+    }
+    for x in corner1.0..corner2.0 {
+        img.put_pixel(x, corner1.1, Rgb([255, 0, 255]));
+        img.put_pixel(x, corner2.1, Rgb([255, 0, 255]));
+    }
+    for y in corner1.1..corner2.1 {
+        img.put_pixel(corner1.0, y, Rgb([255, 0, 255]));
+        img.put_pixel(corner2.0, y, Rgb([255, 0, 255]));
+    }
+
+    img
+}
+
+fn draw_disjoint_chars(char1: &Character, char2: &Character) -> RgbImage {
+    let mut img = RgbImage::new(char1.mask.width(), char1.mask.height());
+
+    // Draw char1 in red
+    for (x, y, pixel) in char1.mask.enumerate_pixels() {
+        if pixel[0] > 0 {
+            img.put_pixel(x, y, Rgb([255, 0, 0]));
+        }
+    }
+
+    // Draw char2 in blue
+    for (x, y, pixel) in char2.mask.enumerate_pixels() {
+        if pixel[0] > 0 {
+            img.put_pixel(x, y, Rgb([0, 0, 255]));
+        }
+    }
+
+    img
+}
+
+pub fn segment_overlapped_chars_by_histogram(
+    img: &RgbImage,
+    corner1: &(u32, u32),
+    corner2: &(u32, u32),
+    histogram1: &HashMap<Rgb<u8>, f64>,
+    histogram2: &HashMap<Rgb<u8>, f64>,
+) -> RgbImage {
+    let mut img_out = RgbImage::new(img.width(), img.height());
+    for x in corner1.0..corner2.0 {
+        for y in corner1.1..corner2.1 {
+            let pixel = img.get_pixel(x, y);
+            if pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 {
+                if !histogram1.contains_key(pixel) {
+                    img_out.put_pixel(x, y, Rgb([0, 0, 255]));
+                } else if !histogram2.contains_key(pixel) {
+                    img_out.put_pixel(x, y, Rgb([255, 0, 0]));
+                } else {
+                    if histogram1[pixel] > histogram2[pixel] {
+                        img_out.put_pixel(x, y, Rgb([255, 0, 0]));
+                    } else {
+                        img_out.put_pixel(x, y, Rgb([0, 0, 255]));
+                    }
+                }
+            }
+        }
+    }
+    img_out
 }

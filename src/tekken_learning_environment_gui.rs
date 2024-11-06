@@ -1,6 +1,7 @@
 use egui::{Color32, ColorImage};
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
+use rand::Rng;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -66,8 +67,10 @@ enum Vision {
     Contrast,
     Mask,
     Centroids,
+    CharsMask,
     Masked,
     Identify,
+    Segmented,
 }
 
 struct FrameTime {
@@ -119,7 +122,7 @@ struct MyApp {
     max_mse: f32,
     histogram1: HashMap<Rgb<u8>, f64>,
     histogram2: HashMap<Rgb<u8>, f64>,
-    ratio_threshold: f32,
+    filter_radius: u32,
 }
 
 impl MyApp {
@@ -142,7 +145,7 @@ impl MyApp {
             opponent_life_info: LifeInfo::default(),
             replay: None,
             agent: Agent::new(),
-            observation_frequency: 50,
+            observation_frequency: 20,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
@@ -155,7 +158,7 @@ impl MyApp {
             max_mse: 0.04,
             histogram1: HashMap::new(),
             histogram2: HashMap::new(),
-            ratio_threshold: 0.95,
+            filter_radius: 1,
         }
     }
 }
@@ -184,7 +187,7 @@ impl eframe::App for MyApp {
                 self.blue_thresholds,
                 self.dilate_k,
                 self.erode_k,
-                self.ratio_threshold,
+                self.filter_radius,
                 &mut self.histogram1.clone(),
                 &mut self.histogram2.clone(),
             );
@@ -228,8 +231,10 @@ impl MyApp {
                 Vision::Contrast => img = self.last_vision_stages.contrast_frame.clone(),
                 Vision::Mask => img = self.last_vision_stages.mask.clone(),
                 Vision::Centroids => img = self.last_vision_stages.centroids_mask.clone(),
+                Vision::CharsMask => img = self.last_vision_stages.chars_mask.clone(),
                 Vision::Masked => img = self.last_vision_stages.masked_frame.clone(),
                 Vision::Identify => img = self.last_vision_stages.identified_frame.clone(),
+                Vision::Segmented => img = self.last_vision_stages.segmented_frame.clone(),
                 Vision::PSX => (),
             }
 
@@ -405,8 +410,10 @@ impl MyApp {
                         ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
                         ui.selectable_value(&mut self.vision, Vision::Mask, "Mask");
                         ui.selectable_value(&mut self.vision, Vision::Centroids, "Centroids");
+                        ui.selectable_value(&mut self.vision, Vision::CharsMask, "CharsMask");
                         ui.selectable_value(&mut self.vision, Vision::Masked, "Masked");
                         ui.selectable_value(&mut self.vision, Vision::Identify, "Identify");
+                        ui.selectable_value(&mut self.vision, Vision::Segmented, "Segmented");
                     });
                 ui.end_row();
                 ui.label("Split View");
@@ -451,10 +458,10 @@ impl MyApp {
                 ui.label("Erode");
                 ui.add(egui::Slider::new(&mut self.erode_k, 0..=20));
                 ui.end_row();
-                ui.label("Identify");
+                ui.label("Segmentation");
                 ui.end_row();
-                ui.label("Ratio");
-                ui.add(egui::Slider::new(&mut self.ratio_threshold, 0.0..=3.0).max_decimals(3));
+                ui.label("Filter");
+                ui.add(egui::Slider::new(&mut self.filter_radius, 0..=20));
                 ui.end_row();
                 ui.label("MSE");
                 ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
@@ -632,14 +639,16 @@ impl MyApp {
                 self.blue_thresholds,
                 self.dilate_k,
                 self.erode_k,
-                self.ratio_threshold,
+                self.filter_radius,
                 &mut self.histogram1,
                 &mut self.histogram2,
             );
 
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
-            let action = self.agent.visit_state(frame_abstraction, reward);
+            //let action = self.agent.visit_state(frame_abstraction, reward);
+            let mut rng = rand::thread_rng();
+            let action = rng.gen_range(0..=255);
             self.last_vision_stages = vision_stages;
             self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
