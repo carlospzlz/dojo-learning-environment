@@ -75,6 +75,7 @@ impl Default for VisionStages {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct Character {
     mask: GrayImage,
     corner1: (u32, u32),
@@ -265,6 +266,13 @@ pub fn get_frame_abstraction(
         || (char1.corner2.1 < char2.corner1.1)
         || (char1.corner1.1 > char2.corner2.1);
 
+    // Check if characters have crossed sides
+    let (char1, char2) = if disjoint {
+        swap_if_needed(char1, char2, &histogram1, &histogram2, &cropped_frame)
+    } else {
+        (char1, char2)
+    };
+
     let identified_frame = if disjoint {
         draw_framed_disjoint_chars(&char1, &char2)
     } else {
@@ -277,7 +285,7 @@ pub fn get_frame_abstraction(
 
     // Final segmentation
     if disjoint {
-        update_histograms(&masked_frame, &corner1, &corner2, histogram1, histogram2);
+        update_histograms(&char1, &char2, &masked_frame, histogram1, histogram2);
     }
     let segmented_frame = if disjoint {
         draw_disjoint_chars(&char1, &char2)
@@ -614,22 +622,21 @@ pub fn draw_border(img: &mut RgbImage) {
     }
 }
 
-pub fn update_histograms(
+fn update_histograms(
+    char1: &Character,
+    char2: &Character,
     img: &RgbImage,
-    corner1: &(u32, u32),
-    corner2: &(u32, u32),
     histogram1: &mut HashMap<Rgb<u8>, f64>,
     histogram2: &mut HashMap<Rgb<u8>, f64>,
 ) {
-    let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
-    for x in corner1.0..half_x {
-        for y in corner1.1..corner2.1 {
+    for (x, y, present) in char1.mask.enumerate_pixels() {
+        if present[0] > 0 {
             let pixel = img.get_pixel(x, y);
             *histogram1.entry(*pixel).or_insert(0.0) += 1.0;
         }
     }
-    for x in half_x..corner2.0 {
-        for y in corner1.1..corner2.1 {
+    for (x, y, present) in char2.mask.enumerate_pixels() {
+        if present[0] > 0 {
             let pixel = img.get_pixel(x, y);
             *histogram2.entry(*pixel).or_insert(0.0) += 1.0;
         }
@@ -718,6 +725,42 @@ fn grow_region(
     }
 
     Character::new(mask_out, region_corner1, region_corner2)
+}
+
+fn swap_if_needed(
+    char1: Character,
+    char2: Character,
+    histogram1: &HashMap<Rgb<u8>, f64>,
+    histogram2: &HashMap<Rgb<u8>, f64>,
+    frame: &RgbImage,
+) -> (Character, Character) {
+    // Character1
+    let (mut count1, mut count2) = (0, 0);
+    for (x, y, present) in char1.mask.enumerate_pixels() {
+        if present[0] > 0 {
+            let pixel = frame.get_pixel(x, y);
+            if histogram1.contains_key(pixel) && histogram2.contains_key(pixel) {
+                count1 += if histogram1[pixel] > histogram2[pixel] {
+                    1
+                } else {
+                    0
+                };
+                count2 += if histogram2[pixel] > histogram1[pixel] {
+                    1
+                } else {
+                    0
+                };
+            }
+        }
+    }
+
+    // If char1 matches better with histogram2,
+    // we need to swap characters.
+    if count2 > count1 {
+        (char2, char1)
+    } else {
+        (char1, char2)
+    }
 }
 
 fn merge_chars_masks(char1_mask: &GrayImage, char2_mask: &GrayImage) -> GrayImage {
