@@ -66,10 +66,9 @@ enum Vision {
     Crop,
     Contrast,
     Mask,
-    Centroids,
-    CharsMask,
     Masked,
-    Identify,
+    Centroids,
+    Chars,
     Segmented,
 }
 
@@ -123,6 +122,10 @@ struct MyApp {
     histogram1: HashMap<Rgb<u8>, f64>,
     histogram2: HashMap<Rgb<u8>, f64>,
     filter_radius: u32,
+    char1_pixel_probability: HashMap<Rgb<u8>, (u64, u64)>,
+    char2_pixel_probability: HashMap<Rgb<u8>, (u64, u64)>,
+    char1_probability_threshold: f64,
+    char2_probability_threshold: f64,
 }
 
 impl MyApp {
@@ -159,6 +162,10 @@ impl MyApp {
             histogram1: HashMap::new(),
             histogram2: HashMap::new(),
             filter_radius: 1,
+            char1_pixel_probability: HashMap::new(),
+            char2_pixel_probability: HashMap::new(),
+            char1_probability_threshold: 0.7,
+            char2_probability_threshold: 0.7,
         }
     }
 }
@@ -190,6 +197,10 @@ impl eframe::App for MyApp {
                 self.filter_radius,
                 &mut self.histogram1.clone(),
                 &mut self.histogram2.clone(),
+                &mut self.char1_pixel_probability.clone(),
+                &mut self.char2_pixel_probability.clone(),
+                self.char1_probability_threshold,
+                self.char2_probability_threshold,
             );
             self.last_vision_stages = vision_stages;
         }
@@ -230,10 +241,9 @@ impl MyApp {
                 Vision::Crop => img = self.last_vision_stages.cropped_frame.clone(),
                 Vision::Contrast => img = self.last_vision_stages.contrast_frame.clone(),
                 Vision::Mask => img = self.last_vision_stages.mask.clone(),
-                Vision::Centroids => img = self.last_vision_stages.centroids_mask.clone(),
-                Vision::CharsMask => img = self.last_vision_stages.chars_mask.clone(),
                 Vision::Masked => img = self.last_vision_stages.masked_frame.clone(),
-                Vision::Identify => img = self.last_vision_stages.identified_frame.clone(),
+                Vision::Centroids => img = self.last_vision_stages.centroids_hud.clone(),
+                Vision::Chars => img = self.last_vision_stages.chars_hud.clone(),
                 Vision::Segmented => img = self.last_vision_stages.segmented_frame.clone(),
                 Vision::PSX => (),
             }
@@ -409,10 +419,9 @@ impl MyApp {
                         ui.selectable_value(&mut self.vision, Vision::Crop, "Crop");
                         ui.selectable_value(&mut self.vision, Vision::Contrast, "Contrast");
                         ui.selectable_value(&mut self.vision, Vision::Mask, "Mask");
-                        ui.selectable_value(&mut self.vision, Vision::Centroids, "Centroids");
-                        ui.selectable_value(&mut self.vision, Vision::CharsMask, "CharsMask");
                         ui.selectable_value(&mut self.vision, Vision::Masked, "Masked");
-                        ui.selectable_value(&mut self.vision, Vision::Identify, "Identify");
+                        ui.selectable_value(&mut self.vision, Vision::Centroids, "Centroids HUD");
+                        ui.selectable_value(&mut self.vision, Vision::Chars, "Chars HUD");
                         ui.selectable_value(&mut self.vision, Vision::Segmented, "Segmented");
                     });
                 ui.end_row();
@@ -428,8 +437,6 @@ impl MyApp {
                 ui.add(separator.horizontal());
             });
             egui::Grid::new("vision_pipeline").show(ui, |ui| {
-                ui.label("Crop:");
-                ui.end_row();
                 ui.label("Contrast:");
                 ui.end_row();
                 ui.label("Red");
@@ -455,13 +462,29 @@ impl MyApp {
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
                 ui.end_row();
-                ui.label("Erode");
-                ui.add(egui::Slider::new(&mut self.erode_k, 0..=20));
+                ui.label("Char1:");
                 ui.end_row();
-                ui.label("Segmentation");
+                ui.label("Threshold1");
+                ui.add(egui::Slider::new(
+                    &mut self.char1_probability_threshold,
+                    0.0..=1.0,
+                ));
                 ui.end_row();
-                ui.label("Filter");
+                ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.filter_radius, 0..=20));
+                ui.end_row();
+                ui.label("Char2:");
+                ui.end_row();
+                ui.label("Threshold");
+                ui.add(egui::Slider::new(
+                    &mut self.char2_probability_threshold,
+                    0.0..=1.0,
+                ));
+                ui.end_row();
+                ui.label("Dilate");
+                ui.add(egui::Slider::new(&mut self.filter_radius, 0..=20));
+                ui.end_row();
+                ui.label("Cmp:");
                 ui.end_row();
                 ui.label("MSE");
                 ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
@@ -642,6 +665,10 @@ impl MyApp {
                 self.filter_radius,
                 &mut self.histogram1,
                 &mut self.histogram2,
+                &mut self.char1_pixel_probability,
+                &mut self.char2_pixel_probability,
+                self.char1_probability_threshold,
+                self.char2_probability_threshold,
             );
 
             // REWARD

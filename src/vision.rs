@@ -29,10 +29,9 @@ pub struct VisionStages {
     pub cropped_frame: RgbImage,
     pub contrast_frame: RgbImage,
     pub mask: RgbImage,
-    pub centroids_mask: RgbImage,
-    pub chars_mask: RgbImage,
     pub masked_frame: RgbImage,
-    pub identified_frame: RgbImage,
+    pub centroids_hud: RgbImage,
+    pub chars_hud: RgbImage,
     pub segmented_frame: RgbImage,
 }
 
@@ -41,20 +40,18 @@ impl VisionStages {
         cropped_frame: RgbImage,
         contrast_frame: RgbImage,
         mask: RgbImage,
-        centroids_mask: RgbImage,
-        chars_mask: RgbImage,
         masked_frame: RgbImage,
-        identified_frame: RgbImage,
+        centroids_hud: RgbImage,
+        chars_hud: RgbImage,
         segmented_frame: RgbImage,
     ) -> Self {
         Self {
             cropped_frame,
             contrast_frame,
             mask,
-            centroids_mask,
-            chars_mask,
             masked_frame,
-            identified_frame,
+            centroids_hud,
+            chars_hud,
             segmented_frame,
         }
     }
@@ -66,10 +63,9 @@ impl Default for VisionStages {
             cropped_frame: RgbImage::default(),
             contrast_frame: RgbImage::default(),
             mask: RgbImage::default(),
-            centroids_mask: RgbImage::default(),
-            chars_mask: RgbImage::default(),
             masked_frame: RgbImage::default(),
-            identified_frame: RgbImage::default(),
+            centroids_hud: RgbImage::default(),
+            chars_hud: RgbImage::default(),
             segmented_frame: RgbImage::default(),
         }
     }
@@ -224,6 +220,10 @@ pub fn get_frame_abstraction(
     filter_radius: u32,
     histogram1: &mut HashMap<Rgb<u8>, f64>,
     histogram2: &mut HashMap<Rgb<u8>, f64>,
+    char1_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
+    char2_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
+    char1_probability_threshold: f64,
+    char2_probability_threshold: f64,
 ) -> (Option<RgbImage>, VisionStages) {
     // Remove life bars
     let cropped_frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
@@ -240,14 +240,17 @@ pub fn get_frame_abstraction(
     // Make it a mask
     let mask = DynamicImage::ImageRgb8(contrast_frame.clone()).to_luma8();
     let mask = dilate(&mask, Norm::L1, dilate_k);
-    let mask = erode(&mask, Norm::L1, erode_k);
+
+    // Apply mask
+    let mut masked_frame = cropped_frame.clone();
+    apply_mask(&mut masked_frame, &mask);
 
     // Centroids
     let (corner1, corner2) = find_corners(&mask);
     let (centroid1, centroid2) = find_centroids(&mask, corner1, corner2);
-    let mut rgb_centroids_mask = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
+    let mut centroids_hud = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
     draw_centroids(
-        &mut rgb_centroids_mask,
+        &mut centroids_hud,
         corner1,
         corner2,
         centroid1,
@@ -257,8 +260,6 @@ pub fn get_frame_abstraction(
     // Grow and enclose characters
     let char1 = grow_region(&mask, &centroid1, &corner1, &corner2);
     let char2 = grow_region(&mask, &centroid2, &corner1, &corner2);
-    let chars_mask = merge_chars_masks(&char1.mask, &char2.mask);
-    let rgb_chars_mask = DynamicImage::ImageLuma8(chars_mask.clone()).to_rgb8();
 
     // Branching depending on how close characters are
     let disjoint = (char1.corner2.0 < char2.corner1.0)
@@ -273,18 +274,17 @@ pub fn get_frame_abstraction(
         (char1, char2)
     };
 
-    let identified_frame = if disjoint {
+    let chars_hud = if disjoint {
         draw_framed_disjoint_chars(&char1, &char2)
     } else {
         draw_framed_overlapped_chars(&char1, &char2)
     };
 
-    // Apply mask
-    let mut masked_frame = cropped_frame.clone();
-    apply_mask(&mut masked_frame, &chars_mask);
-
     // Final segmentation
     if disjoint {
+        // Experimental: Compute probs
+        update_probabilities(&char1, &cropped_frame, char1_pixel_probability);
+        update_probabilities(&char2, &cropped_frame, char2_pixel_probability);
         update_histograms(&char1, &char2, &masked_frame, histogram1, histogram2);
     }
     let segmented_frame = if disjoint {
@@ -300,56 +300,32 @@ pub fn get_frame_abstraction(
         median_filter(&segmented_frame, filter_radius, filter_radius)
     };
 
-    // Grow char1 and char2 (using contrast thresholds)
-    // Compare them
-    // Are they different?
-    // YES
-    //  `-> Check which histogram matches better
-    //  `-> character recognized
-    //  `-> Update histogram
-    // NO
-    // they can't be distinguished
-    //  `-> Grow from middle using histogram
-    //  `-> Smooth?
-    //  `-> Scale down
+    // Experimental: Segment by probability
+    let segmented_by_probability = segment_by_probability(
+        &cropped_frame,
+        &char1_pixel_probability,
+        &char2_pixel_probability,
+        char1_probability_threshold,
+        char2_probability_threshold,
+    );
+    // segment each char separately from mask
+    // Don't median, dilate
+    // merge
 
-    // Track fighters separetely
-    // previous histogram
-    // histograms are important
-
-    //// Identify fighters
-    //let ratio = if (corner2.1 - corner1.1) > 0 {
-    //    Some((corner2.0 - corner1.0) as f32 / (corner2.1 - corner1.1) as f32)
-    //} else {
-    //    None
-    //};
-    //let identified_frame = if let Some(ratio) = ratio {
-    //    if ratio > ratio_threshold {
-    //        update_histograms(&masked_frame, &corner1, &corner2, histogram1, histogram2);
-    //        identify_fighters_by_side(&mask, &corner1, &corner2)
-    //    } else {
-    //        identify_fighters_by_histogram(
-    //            &masked_frame,
-    //            &corner1,
-    //            &corner2,
-    //            histogram1,
-    //            histogram2,
-    //        )
-    //    }
-    //} else {
-    //    RgbImage::default()
-    //};
+    // when merged
+    // get segment from blob
+    // dilate
+    // merge somehow (use violet?)
 
     // Vision stages
-    let rgb_mask = DynamicImage::ImageLuma8(mask).to_rgb8();
+    let mask = DynamicImage::ImageLuma8(mask).to_rgb8();
     let vision_stages = VisionStages::new(
         cropped_frame,
         contrast_frame,
-        rgb_mask,
-        rgb_centroids_mask,
-        rgb_chars_mask,
+        mask,
         masked_frame,
-        identified_frame,
+        centroids_hud,
+        chars_hud,
         segmented_frame.clone(),
     );
 
@@ -889,4 +865,63 @@ pub fn segment_overlapped_chars_by_histogram(
         }
     }
     img_out
+}
+
+fn update_probabilities(
+    char: &Character,
+    img: &RgbImage,
+    char_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
+) {
+    for (x, y, pixel) in img.enumerate_pixels() {
+        let pixel = img.get_pixel(x, y);
+        if !char_pixel_probability.contains_key(pixel) {
+            char_pixel_probability.insert(pixel.clone(), (0, 0));
+        }
+        let (count, total) = &mut char_pixel_probability.get_mut(pixel).unwrap();
+        *count += if char.mask.get_pixel(x, y)[0] > 0 {
+            1
+        } else {
+            0
+        };
+        *total += 1;
+    }
+}
+
+fn segment_by_probability(
+    img: &RgbImage,
+    char1_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
+    char2_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
+    char1_prob_threshold: f64,
+    char2_prob_threshold: f64,
+) -> RgbImage {
+    let mut segmented_img = RgbImage::new(img.width(), img.height());
+    for (x, y, pixel) in img.enumerate_pixels() {
+        let pixel = img.get_pixel(x, y);
+
+        // Char1
+        let (count, total) = if char1_pixel_probability.contains_key(pixel) {
+            char1_pixel_probability[pixel]
+        } else {
+            (0, 1)
+        };
+        let prob1 = count as f64 / total as f64;
+
+        // Char2
+        let (count, total) = if char2_pixel_probability.contains_key(pixel) {
+            char2_pixel_probability[pixel]
+        } else {
+            (0, 1)
+        };
+        let prob2 = count as f64 / total as f64;
+
+        if (prob1 > char1_prob_threshold) && (prob2 > char2_prob_threshold) {
+            segmented_img.put_pixel(x, y, Rgb([255, 0, 255]));
+        } else if prob1 > char1_prob_threshold {
+            segmented_img.put_pixel(x, y, Rgb([255, 0, 0]));
+        } else if prob2 > char2_prob_threshold {
+            segmented_img.put_pixel(x, y, Rgb([0, 0, 255]));
+        }
+    }
+
+    segmented_img
 }
