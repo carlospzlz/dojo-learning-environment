@@ -16,10 +16,6 @@ pub struct Agent {
     number_of_revisited_states: usize,
     discount_factor: f32,
     learning_rate: f32,
-    red_thresholds: [u8; 2],
-    green_thresholds: [u8; 2],
-    blue_thresholds: [u8; 2],
-    dilate_k: u8,
     max_mse: f32,
 }
 
@@ -53,10 +49,6 @@ impl Agent {
             number_of_revisited_states: 0,
             discount_factor: 0.9,
             learning_rate: 0.5,
-            red_thresholds: [0, 173],
-            green_thresholds: [15, 165],
-            blue_thresholds: [15, 156],
-            dilate_k: 6,
             max_mse: 0.012,
         }
     }
@@ -185,7 +177,7 @@ impl Agent {
     pub fn get_last_state_abstraction(&self) -> RgbImage {
         if let Some(index) = self.previous_index {
             let mut frame = self.states[index].frame_abstraction.clone();
-            let x_limits = self.states[index].x_limits;
+            //let x_limits = self.states[index].x_limits;
             //vision::draw_x_limits(&mut frame, x_limits);
             if index < self.states.len() - 1 {
                 vision::draw_border(&mut frame);
@@ -208,26 +200,6 @@ impl Agent {
             return self.states[index].next_states.len();
         }
         0
-    }
-
-    pub fn set_red_thresholds(&mut self, val: [u8; 2]) {
-        self.red_thresholds = val;
-    }
-
-    pub fn set_green_thresholds(&mut self, val: [u8; 2]) {
-        self.green_thresholds = val;
-    }
-
-    pub fn set_blue_thresholds(&mut self, val: [u8; 2]) {
-        self.blue_thresholds = val;
-    }
-
-    pub fn set_dilate_k(&mut self, val: u8) {
-        self.dilate_k = val;
-    }
-
-    pub fn set_max_mse(&mut self, val: f32) {
-        self.max_mse = val;
     }
 }
 

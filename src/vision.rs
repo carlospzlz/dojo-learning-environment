@@ -1,7 +1,6 @@
 use image::{DynamicImage, GrayImage, Luma, Rgb, RgbImage};
 use imageproc::distance_transform::Norm;
-use imageproc::filter::median_filter;
-use imageproc::morphology::{dilate, erode};
+use imageproc::morphology::dilate;
 use std::cmp;
 use std::collections::{HashMap, VecDeque};
 
@@ -358,25 +357,6 @@ pub fn get_frame_abstraction(
     (Some(frame_abstraction), vision_stages)
 }
 
-pub fn crop_frame(frame: RgbImage) {
-    DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
-}
-
-#[allow(dead_code)]
-pub fn get_histogram(img: &RgbImage) -> Vec<Vec<Vec<u32>>> {
-    let mut histogram = vec![vec![vec![0; 256]; 256]; 256];
-    for x in 0..img.width() {
-        for y in 0..img.height() {
-            let pixel = img.get_pixel(x, y);
-            let r = pixel[0];
-            let g = pixel[1];
-            let b = pixel[2];
-            histogram[r as usize][g as usize][b as usize] += 1;
-        }
-    }
-    histogram
-}
-
 #[allow(dead_code)]
 pub fn enclose_with_q(img: &mut RgbImage, q: f32) {
     if q == 0.0 {
@@ -408,7 +388,8 @@ pub fn apply_thresholds(
     //let img = img.to_rgb8();
     let mut img_out = RgbImage::new(img.width(), img.height());
     // Avoid some annoying white dots at the right of the frame
-    for x in 0..img.width() - 1 {
+    //let width = max(img.width() - 1, 0);
+    for x in 0..img.width() {
         for y in 0..img.height() {
             let pixel = img.get_pixel(x, y);
             let r = if pixel[0] < red_thresholds[0] || pixel[0] > red_thresholds[1] {
@@ -455,7 +436,7 @@ fn apply_mask(img: &mut RgbImage, mask: &GrayImage) {
 }
 
 fn find_corners(img: &GrayImage) -> ((u32, u32), (u32, u32)) {
-    let mut corner1 = (img.width() - 1, img.height() - 1);
+    let mut corner1 = (img.width(), img.height());
     let mut corner2 = (0, 0);
     for x in 0..img.width() {
         for y in 0..img.height() {
@@ -567,6 +548,7 @@ fn draw_centroids(
     }
 }
 
+#[allow(dead_code)]
 fn get_detected_amount(img: &GrayImage) -> f32 {
     let mut count = 0;
     for x in 0..img.width() {
@@ -593,6 +575,7 @@ pub fn get_x_limits(img: &RgbImage) -> (u32, u32) {
     (min_x, max_x)
 }
 
+#[allow(dead_code)]
 pub fn draw_x_limits(img: &mut RgbImage, x_limits: (u32, u32)) {
     let color = Rgb([0, 128, 0]);
     for y in 0..img.height() {
@@ -611,51 +594,6 @@ pub fn draw_border(img: &mut RgbImage) {
         img.put_pixel(0, y, color);
         img.put_pixel(img.width() - 1, y, color);
     }
-}
-
-fn update_histograms(
-    char1: &Character,
-    char2: &Character,
-    img: &RgbImage,
-    histogram1: &mut HashMap<Rgb<u8>, f64>,
-    histogram2: &mut HashMap<Rgb<u8>, f64>,
-) {
-    for (x, y, present) in char1.mask.enumerate_pixels() {
-        if present[0] > 0 {
-            let pixel = img.get_pixel(x, y);
-            *histogram1.entry(*pixel).or_insert(0.0) += 1.0;
-        }
-    }
-    for (x, y, present) in char2.mask.enumerate_pixels() {
-        if present[0] > 0 {
-            let pixel = img.get_pixel(x, y);
-            *histogram2.entry(*pixel).or_insert(0.0) += 1.0;
-        }
-    }
-}
-
-pub fn identify_fighters_by_side(
-    mask: &GrayImage,
-    corner1: &(u32, u32),
-    corner2: &(u32, u32),
-) -> RgbImage {
-    let mut img_out = RgbImage::new(mask.width(), mask.height());
-    let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
-    for x in corner1.0..half_x {
-        for y in corner1.1..corner2.1 {
-            if mask.get_pixel(x, y)[0] > 0 {
-                img_out.put_pixel(x, y, Rgb([255, 0, 0]));
-            }
-        }
-    }
-    for x in half_x..corner2.0 {
-        for y in corner1.1..corner2.1 {
-            if mask.get_pixel(x, y)[0] > 0 {
-                img_out.put_pixel(x, y, Rgb([0, 0, 255]));
-            }
-        }
-    }
-    img_out
 }
 
 fn grow_region(
@@ -838,62 +776,12 @@ fn draw_framed_overlapped_chars(char1: &Character, char2: &Character) -> RgbImag
     img
 }
 
-fn draw_disjoint_chars(char1: &Character, char2: &Character) -> RgbImage {
-    let mut img = RgbImage::new(char1.mask.width(), char1.mask.height());
-
-    // Draw char1 in red
-    for (x, y, pixel) in char1.mask.enumerate_pixels() {
-        if pixel[0] > 0 {
-            img.put_pixel(x, y, Rgb([255, 0, 0]));
-        }
-    }
-
-    // Draw char2 in blue
-    for (x, y, pixel) in char2.mask.enumerate_pixels() {
-        if pixel[0] > 0 {
-            img.put_pixel(x, y, Rgb([0, 0, 255]));
-        }
-    }
-
-    img
-}
-
-pub fn segment_overlapped_chars_by_histogram(
-    img: &RgbImage,
-    corner1: &(u32, u32),
-    corner2: &(u32, u32),
-    histogram1: &HashMap<Rgb<u8>, f64>,
-    histogram2: &HashMap<Rgb<u8>, f64>,
-) -> RgbImage {
-    let mut img_out = RgbImage::new(img.width(), img.height());
-    for x in corner1.0..corner2.0 {
-        for y in corner1.1..corner2.1 {
-            let pixel = img.get_pixel(x, y);
-            if pixel[0] != 0 || pixel[1] != 0 || pixel[2] != 0 {
-                if !histogram1.contains_key(pixel) {
-                    img_out.put_pixel(x, y, Rgb([0, 0, 255]));
-                } else if !histogram2.contains_key(pixel) {
-                    img_out.put_pixel(x, y, Rgb([255, 0, 0]));
-                } else {
-                    if histogram1[pixel] > histogram2[pixel] {
-                        img_out.put_pixel(x, y, Rgb([255, 0, 0]));
-                    } else {
-                        img_out.put_pixel(x, y, Rgb([0, 0, 255]));
-                    }
-                }
-            }
-        }
-    }
-    img_out
-}
-
 fn update_probabilities(
     char: &Character,
     img: &RgbImage,
     char_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
 ) {
     for (x, y, pixel) in img.enumerate_pixels() {
-        let pixel = img.get_pixel(x, y);
         if !char_pixel_probability.contains_key(pixel) {
             char_pixel_probability.insert(pixel.clone(), (0, 0));
         }

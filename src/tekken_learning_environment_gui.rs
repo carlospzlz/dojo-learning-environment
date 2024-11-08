@@ -1,7 +1,6 @@
 use egui::{Color32, ColorImage};
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
-use rand::Rng;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -183,7 +182,7 @@ impl eframe::App for MyApp {
             ctx.request_repaint()
         } else {
             // Even if not running update vision
-            let (frame_abstraction, vision_stages) = vision::get_frame_abstraction(
+            let (_, vision_stages) = vision::get_frame_abstraction(
                 &self.frame.clone(),
                 self.red_thresholds,
                 self.green_thresholds,
@@ -665,9 +664,7 @@ impl MyApp {
 
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
-            //let action = self.agent.visit_state(frame_abstraction, reward);
-            let mut rng = rand::thread_rng();
-            let action = rng.gen_range(0..=255);
+            let action = self.agent.visit_state(frame_abstraction, reward);
             self.last_vision_stages = vision_stages;
             self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
