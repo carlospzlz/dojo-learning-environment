@@ -216,9 +216,6 @@ pub fn get_frame_abstraction(
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
-    erode_k: u8,
-    histogram1: &mut HashMap<Rgb<u8>, f64>,
-    histogram2: &mut HashMap<Rgb<u8>, f64>,
     char1_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
     char2_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
     char1_probability_threshold: f64,
@@ -264,7 +261,13 @@ pub fn get_frame_abstraction(
 
     // Check if characters have crossed sides
     let (char1, char2) = if disjoint {
-        swap_if_needed(char1, char2, &histogram1, &histogram2, &cropped_frame)
+        swap_if_needed(
+            char1,
+            char2,
+            &char1_pixel_probability,
+            &char2_pixel_probability,
+            &cropped_frame,
+        )
     } else {
         (char1, char2)
     };
@@ -277,10 +280,8 @@ pub fn get_frame_abstraction(
 
     // Update probablity histogram
     if disjoint {
-        // Experimental: Compute probs
         update_probabilities(&char1, &cropped_frame, char1_pixel_probability);
         update_probabilities(&char2, &cropped_frame, char2_pixel_probability);
-        update_histograms(&char1, &char2, &masked_frame, histogram1, histogram2);
     }
 
     // Segment via probability histogram
@@ -330,15 +331,6 @@ pub fn get_frame_abstraction(
     let segmented_char2 = dilate(&segmented_char2, Norm::L1, char2_dilate_k);
 
     let segmented_frame = merge_segmented_chars(segmented_char1, segmented_char2, char1, char2);
-
-    // segment each char separately from mask
-    // Don't median, dilate
-    // merge
-
-    // when merged
-    // get segment from blob
-    // dilate
-    // merge somehow (use violet?)
 
     // Vision stages
     let mask = DynamicImage::ImageLuma8(mask).to_rgb8();
@@ -729,8 +721,8 @@ fn grow_region(
 fn swap_if_needed(
     char1: Character,
     char2: Character,
-    histogram1: &HashMap<Rgb<u8>, f64>,
-    histogram2: &HashMap<Rgb<u8>, f64>,
+    char1_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
+    char2_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
     frame: &RgbImage,
 ) -> (Character, Character) {
     // Character1
@@ -738,18 +730,23 @@ fn swap_if_needed(
     for (x, y, present) in char1.mask.enumerate_pixels() {
         if present[0] > 0 {
             let pixel = frame.get_pixel(x, y);
-            if histogram1.contains_key(pixel) && histogram2.contains_key(pixel) {
-                count1 += if histogram1[pixel] > histogram2[pixel] {
-                    1
-                } else {
-                    0
-                };
-                count2 += if histogram2[pixel] > histogram1[pixel] {
-                    1
-                } else {
-                    0
-                };
-            }
+
+            let (count, total) = if char1_pixel_probability.contains_key(pixel) {
+                char1_pixel_probability[pixel]
+            } else {
+                (0, 1)
+            };
+            let prob1 = count as f64 / total as f64;
+
+            let (count, total) = if char2_pixel_probability.contains_key(pixel) {
+                char2_pixel_probability[pixel]
+            } else {
+                (0, 1)
+            };
+            let prob2 = count as f64 / total as f64;
+
+            count1 += if prob1 > prob2 { 1 } else { 0 };
+            count2 += if prob2 > prob1 { 1 } else { 0 };
         }
     }
 
@@ -909,45 +906,6 @@ fn update_probabilities(
         *total += 1;
     }
 }
-
-//fn segment_by_probability(
-//    img: &RgbImage,
-//    char1_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
-//    char2_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
-//    char1_prob_threshold: f64,
-//    char2_prob_threshold: f64,
-//) -> RgbImage {
-//    let mut segmented_img = RgbImage::new(img.width(), img.height());
-//    for (x, y, pixel) in img.enumerate_pixels() {
-//        let pixel = img.get_pixel(x, y);
-//
-//        // Char1
-//        let (count, total) = if char1_pixel_probability.contains_key(pixel) {
-//            char1_pixel_probability[pixel]
-//        } else {
-//            (0, 1)
-//        };
-//        let prob1 = count as f64 / total as f64;
-//
-//        // Char2
-//        let (count, total) = if char2_pixel_probability.contains_key(pixel) {
-//            char2_pixel_probability[pixel]
-//        } else {
-//            (0, 1)
-//        };
-//        let prob2 = count as f64 / total as f64;
-//
-//        if (prob1 > char1_prob_threshold) && (prob2 > char2_prob_threshold) {
-//            segmented_img.put_pixel(x, y, Rgb([255, 0, 255]));
-//        } else if prob1 > char1_prob_threshold {
-//            segmented_img.put_pixel(x, y, Rgb([255, 0, 0]));
-//        } else if prob2 > char2_prob_threshold {
-//            segmented_img.put_pixel(x, y, Rgb([0, 0, 255]));
-//        }
-//    }
-//
-//    segmented_img
-//}
 
 fn segment_by_probability(
     mask: &GrayImage,
