@@ -865,3 +865,24 @@ fn enclose(char1: &Character, char2: &Character) -> ((u32, u32), (u32, u32)) {
         ),
     )
 }
+
+pub fn add_to_trace(img: &RgbImage, trace: &RgbImage, amount: u8) -> RgbImage {
+    let mut traced_img = RgbImage::new(img.width(), img.height());
+    let intensity_lost = (255.0 / amount as f32) as i32;
+
+    for x in 0..traced_img.width() {
+        for y in 0..traced_img.height() {
+            let pixel = img.get_pixel(x, y);
+            if (pixel[0] > 0) || (pixel[2] > 0) {
+                traced_img.put_pixel(x, y, pixel.clone())
+            } else {
+                let pixel = trace.get_pixel(x, y);
+                let r = cmp::max(pixel[0] as i32 - intensity_lost, 0) as u8;
+                let b = cmp::max(pixel[2] as i32 - intensity_lost, 0) as u8;
+                traced_img.put_pixel(x, y, Rgb([r, 0, b]));
+            }
+        }
+    }
+
+    traced_img
+}

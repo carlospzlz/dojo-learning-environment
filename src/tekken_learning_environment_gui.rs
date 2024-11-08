@@ -123,6 +123,8 @@ struct MyApp {
     char2_probability_threshold: f64,
     char1_dilate_k: u8,
     char2_dilate_k: u8,
+    previous_trace_abstraction: RgbImage,
+    trace: u8,
 }
 
 impl MyApp {
@@ -161,6 +163,8 @@ impl MyApp {
             char2_probability_threshold: 0.7,
             char1_dilate_k: 2,
             char2_dilate_k: 2,
+            previous_trace_abstraction: RgbImage::default(),
+            trace: 6,
         }
     }
 }
@@ -477,6 +481,9 @@ impl MyApp {
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.char2_dilate_k, 0..=20));
                 ui.end_row();
+                ui.label("Trace");
+                ui.add(egui::Slider::new(&mut self.trace, 0..=255));
+                ui.end_row();
                 ui.label("Cmp:");
                 ui.end_row();
                 ui.label("MSE");
@@ -661,10 +668,21 @@ impl MyApp {
                 self.char1_dilate_k,
                 self.char2_dilate_k,
             );
+            let frame_abstraction = frame_abstraction.unwrap();
+            if self.previous_trace_abstraction.is_empty() {
+                self.previous_trace_abstraction =
+                    RgbImage::new(frame_abstraction.width(), frame_abstraction.height())
+            };
+            let trace_abstraction = vision::add_to_trace(
+                &frame_abstraction,
+                &self.previous_trace_abstraction,
+                self.trace,
+            );
+            self.previous_trace_abstraction = trace_abstraction.clone();
 
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
-            let action = self.agent.visit_state(frame_abstraction, reward);
+            let action = self.agent.visit_state(Some(trace_abstraction), reward);
             self.last_vision_stages = vision_stages;
             self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
