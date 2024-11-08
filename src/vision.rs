@@ -217,13 +217,14 @@ pub fn get_frame_abstraction(
     blue_thresholds: [u8; 2],
     dilate_k: u8,
     erode_k: u8,
-    filter_radius: u32,
     histogram1: &mut HashMap<Rgb<u8>, f64>,
     histogram2: &mut HashMap<Rgb<u8>, f64>,
     char1_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
     char2_pixel_probability: &mut HashMap<Rgb<u8>, (u64, u64)>,
     char1_probability_threshold: f64,
     char2_probability_threshold: f64,
+    char1_dilate_k: u8,
+    char2_dilate_k: u8,
 ) -> (Option<RgbImage>, VisionStages) {
     // Remove life bars
     let cropped_frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
@@ -325,8 +326,8 @@ pub fn get_frame_abstraction(
         )
     };
 
-    //let segmented_char1 = dilate(&segmented_char1, Norm::L1, dilate_k);
-    //let segmented_char2 = dilate(&segmented_char2, Norm::L1, dilate_k);
+    let segmented_char1 = dilate(&segmented_char1, Norm::L1, char1_dilate_k);
+    let segmented_char2 = dilate(&segmented_char2, Norm::L1, char2_dilate_k);
 
     let segmented_frame = merge_segmented_chars(segmented_char1, segmented_char2, char1, char2);
 

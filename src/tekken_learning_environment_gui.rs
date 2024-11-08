@@ -121,11 +121,12 @@ struct MyApp {
     max_mse: f32,
     histogram1: HashMap<Rgb<u8>, f64>,
     histogram2: HashMap<Rgb<u8>, f64>,
-    filter_radius: u32,
     char1_pixel_probability: HashMap<Rgb<u8>, (u64, u64)>,
     char2_pixel_probability: HashMap<Rgb<u8>, (u64, u64)>,
     char1_probability_threshold: f64,
     char2_probability_threshold: f64,
+    char1_dilate_k: u8,
+    char2_dilate_k: u8,
 }
 
 impl MyApp {
@@ -161,11 +162,12 @@ impl MyApp {
             max_mse: 0.04,
             histogram1: HashMap::new(),
             histogram2: HashMap::new(),
-            filter_radius: 1,
             char1_pixel_probability: HashMap::new(),
             char2_pixel_probability: HashMap::new(),
             char1_probability_threshold: 0.7,
             char2_probability_threshold: 0.7,
+            char1_dilate_k: 2,
+            char2_dilate_k: 2,
         }
     }
 }
@@ -194,13 +196,14 @@ impl eframe::App for MyApp {
                 self.blue_thresholds,
                 self.dilate_k,
                 self.erode_k,
-                self.filter_radius,
                 &mut self.histogram1.clone(),
                 &mut self.histogram2.clone(),
                 &mut self.char1_pixel_probability.clone(),
                 &mut self.char2_pixel_probability.clone(),
                 self.char1_probability_threshold,
                 self.char2_probability_threshold,
+                self.char1_dilate_k,
+                self.char2_dilate_k,
             );
             self.last_vision_stages = vision_stages;
         }
@@ -464,14 +467,14 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Char1:");
                 ui.end_row();
-                ui.label("Threshold1");
+                ui.label("Threshold");
                 ui.add(egui::Slider::new(
                     &mut self.char1_probability_threshold,
                     0.0..=1.0,
                 ));
                 ui.end_row();
                 ui.label("Dilate");
-                ui.add(egui::Slider::new(&mut self.filter_radius, 0..=20));
+                ui.add(egui::Slider::new(&mut self.char1_dilate_k, 0..=20));
                 ui.end_row();
                 ui.label("Char2:");
                 ui.end_row();
@@ -482,7 +485,7 @@ impl MyApp {
                 ));
                 ui.end_row();
                 ui.label("Dilate");
-                ui.add(egui::Slider::new(&mut self.filter_radius, 0..=20));
+                ui.add(egui::Slider::new(&mut self.char2_dilate_k, 0..=20));
                 ui.end_row();
                 ui.label("Cmp:");
                 ui.end_row();
@@ -662,13 +665,14 @@ impl MyApp {
                 self.blue_thresholds,
                 self.dilate_k,
                 self.erode_k,
-                self.filter_radius,
                 &mut self.histogram1,
                 &mut self.histogram2,
                 &mut self.char1_pixel_probability,
                 &mut self.char2_pixel_probability,
                 self.char1_probability_threshold,
                 self.char2_probability_threshold,
+                self.char1_dilate_k,
+                self.char2_dilate_k,
             );
 
             // REWARD
