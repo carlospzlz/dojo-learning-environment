@@ -249,13 +249,7 @@ pub fn get_frame_abstraction(
     let (corner1, corner2) = find_corners(&mask);
     let (centroid1, centroid2) = find_centroids(&mask, corner1, corner2);
     let mut centroids_hud = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
-    draw_centroids(
-        &mut centroids_hud,
-        corner1,
-        corner2,
-        centroid1,
-        centroid2,
-    );
+    draw_centroids(&mut centroids_hud, corner1, corner2, centroid1, centroid2);
 
     // Grow and enclose characters
     let char1 = grow_region(&mask, &centroid1, &corner1, &corner2);
@@ -280,34 +274,62 @@ pub fn get_frame_abstraction(
         draw_framed_overlapped_chars(&char1, &char2)
     };
 
-    // Final segmentation
+    // Update probablity histogram
     if disjoint {
         // Experimental: Compute probs
         update_probabilities(&char1, &cropped_frame, char1_pixel_probability);
         update_probabilities(&char2, &cropped_frame, char2_pixel_probability);
         update_histograms(&char1, &char2, &masked_frame, histogram1, histogram2);
     }
-    let segmented_frame = if disjoint {
-        draw_disjoint_chars(&char1, &char2)
+
+    // Segment via probability histogram
+    let (segmented_char1, segmented_char2) = if disjoint {
+        (
+            segment_by_probability(
+                &char1.mask,
+                &char1.corner1,
+                &char1.corner2,
+                &cropped_frame,
+                &char1_pixel_probability,
+                char1_probability_threshold,
+            ),
+            segment_by_probability(
+                &char2.mask,
+                &char2.corner1,
+                &char2.corner2,
+                &cropped_frame,
+                &char2_pixel_probability,
+                char2_probability_threshold,
+            ),
+        )
     } else {
-        let segmented_frame = segment_overlapped_chars_by_histogram(
-            &masked_frame,
-            &corner1,
-            &corner2,
-            histogram1,
-            histogram2,
-        );
-        median_filter(&segmented_frame, filter_radius, filter_radius)
+        let merged_masks = merge_chars_masks(&char1.mask, &char2.mask);
+        let (corner1, corner2) = enclose(&char1, &char2);
+        (
+            segment_by_probability(
+                &merged_masks,
+                &corner1,
+                &corner2,
+                &cropped_frame,
+                &char1_pixel_probability,
+                char1_probability_threshold,
+            ),
+            segment_by_probability(
+                &merged_masks,
+                &corner1,
+                &corner2,
+                &cropped_frame,
+                &char2_pixel_probability,
+                char2_probability_threshold,
+            ),
+        )
     };
 
-    // Experimental: Segment by probability
-    let segmented_by_probability = segment_by_probability(
-        &cropped_frame,
-        &char1_pixel_probability,
-        &char2_pixel_probability,
-        char1_probability_threshold,
-        char2_probability_threshold,
-    );
+    //let segmented_char1 = dilate(&segmented_char1, Norm::L1, dilate_k);
+    //let segmented_char2 = dilate(&segmented_char2, Norm::L1, dilate_k);
+
+    let segmented_frame = merge_segmented_chars(segmented_char1, segmented_char2, char1, char2);
+
     // segment each char separately from mask
     // Don't median, dilate
     // merge
@@ -887,41 +909,112 @@ fn update_probabilities(
     }
 }
 
+//fn segment_by_probability(
+//    img: &RgbImage,
+//    char1_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
+//    char2_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
+//    char1_prob_threshold: f64,
+//    char2_prob_threshold: f64,
+//) -> RgbImage {
+//    let mut segmented_img = RgbImage::new(img.width(), img.height());
+//    for (x, y, pixel) in img.enumerate_pixels() {
+//        let pixel = img.get_pixel(x, y);
+//
+//        // Char1
+//        let (count, total) = if char1_pixel_probability.contains_key(pixel) {
+//            char1_pixel_probability[pixel]
+//        } else {
+//            (0, 1)
+//        };
+//        let prob1 = count as f64 / total as f64;
+//
+//        // Char2
+//        let (count, total) = if char2_pixel_probability.contains_key(pixel) {
+//            char2_pixel_probability[pixel]
+//        } else {
+//            (0, 1)
+//        };
+//        let prob2 = count as f64 / total as f64;
+//
+//        if (prob1 > char1_prob_threshold) && (prob2 > char2_prob_threshold) {
+//            segmented_img.put_pixel(x, y, Rgb([255, 0, 255]));
+//        } else if prob1 > char1_prob_threshold {
+//            segmented_img.put_pixel(x, y, Rgb([255, 0, 0]));
+//        } else if prob2 > char2_prob_threshold {
+//            segmented_img.put_pixel(x, y, Rgb([0, 0, 255]));
+//        }
+//    }
+//
+//    segmented_img
+//}
+
 fn segment_by_probability(
+    mask: &GrayImage,
+    corner1: &(u32, u32),
+    corner2: &(u32, u32),
     img: &RgbImage,
-    char1_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
-    char2_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
-    char1_prob_threshold: f64,
-    char2_prob_threshold: f64,
-) -> RgbImage {
-    let mut segmented_img = RgbImage::new(img.width(), img.height());
-    for (x, y, pixel) in img.enumerate_pixels() {
-        let pixel = img.get_pixel(x, y);
+    char_pixel_probability: &HashMap<Rgb<u8>, (u64, u64)>,
+    char_prob_threshold: f64,
+) -> GrayImage {
+    let mut segmented_img = GrayImage::new(img.width(), img.height());
+    for x in corner1.0..corner2.0 {
+        for y in corner1.1..corner2.1 {
+            if mask.get_pixel(x, y)[0] > 0 {
+                let pixel = img.get_pixel(x, y);
 
-        // Char1
-        let (count, total) = if char1_pixel_probability.contains_key(pixel) {
-            char1_pixel_probability[pixel]
-        } else {
-            (0, 1)
-        };
-        let prob1 = count as f64 / total as f64;
+                let (count, total) = if char_pixel_probability.contains_key(pixel) {
+                    char_pixel_probability[pixel]
+                } else {
+                    (0, 1)
+                };
+                let prob = count as f64 / total as f64;
 
-        // Char2
-        let (count, total) = if char2_pixel_probability.contains_key(pixel) {
-            char2_pixel_probability[pixel]
-        } else {
-            (0, 1)
-        };
-        let prob2 = count as f64 / total as f64;
-
-        if (prob1 > char1_prob_threshold) && (prob2 > char2_prob_threshold) {
-            segmented_img.put_pixel(x, y, Rgb([255, 0, 255]));
-        } else if prob1 > char1_prob_threshold {
-            segmented_img.put_pixel(x, y, Rgb([255, 0, 0]));
-        } else if prob2 > char2_prob_threshold {
-            segmented_img.put_pixel(x, y, Rgb([0, 0, 255]));
+                if prob > char_prob_threshold {
+                    segmented_img.put_pixel(x, y, Luma([255]));
+                }
+            }
         }
     }
 
     segmented_img
+}
+
+fn merge_segmented_chars(
+    segmented_char1: GrayImage,
+    segmented_char2: GrayImage,
+    char1: Character,
+    char2: Character,
+) -> RgbImage {
+    let mut merged_img = RgbImage::new(segmented_char1.width(), segmented_char1.height());
+
+    let (corner1, corner2) = enclose(&char1, &char2);
+
+    for x in corner1.0..corner2.0 {
+        for y in corner1.1..corner2.1 {
+            let pixel1 = segmented_char1.get_pixel(x, y)[0];
+            let pixel2 = segmented_char2.get_pixel(x, y)[0];
+            if pixel1 > 0 && pixel2 > 0 {
+                merged_img.put_pixel(x, y, Rgb([255, 0, 255]));
+            } else if pixel1 > 0 {
+                merged_img.put_pixel(x, y, Rgb([255, 0, 0]));
+            } else if pixel2 > 0 {
+                merged_img.put_pixel(x, y, Rgb([0, 0, 255]));
+            }
+        }
+    }
+
+    merged_img
+}
+
+fn enclose(char1: &Character, char2: &Character) -> ((u32, u32), (u32, u32)) {
+    (
+        (
+            cmp::min(char1.corner1.0, char2.corner1.0),
+            cmp::min(char1.corner1.1, char2.corner1.1),
+        ),
+        (
+            cmp::max(char1.corner2.0, char2.corner2.0),
+            cmp::max(char1.corner2.1, char2.corner2.1),
+        ),
+    )
 }
