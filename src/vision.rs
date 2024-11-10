@@ -24,6 +24,23 @@ impl Default for LifeInfo {
     }
 }
 
+#[derive(Clone)]
+pub struct FrameAbstraction {
+    pub frame: RgbImage,
+    pub char1_centroid: (u32, u32),
+    pub char2_centroid: (u32, u32),
+}
+
+impl FrameAbstraction {
+    fn new(frame: RgbImage, char1_centroid: (u32, u32), char2_centroid: (u32, u32)) -> Self {
+        Self {
+            frame,
+            char1_centroid,
+            char2_centroid,
+        }
+    }
+}
+
 pub struct VisionStages {
     pub cropped_frame: RgbImage,
     pub contrast_frame: RgbImage,
@@ -221,7 +238,7 @@ pub fn get_frame_abstraction(
     char2_probability_threshold: f64,
     char1_dilate_k: u8,
     char2_dilate_k: u8,
-) -> (Option<RgbImage>, VisionStages) {
+) -> (FrameAbstraction, VisionStages) {
     // Remove life bars
     let cropped_frame = DynamicImage::ImageRgb8(frame.clone()).crop(0, 100, 368, 480);
     let cropped_frame = cropped_frame.clone().to_rgb8();
@@ -246,7 +263,7 @@ pub fn get_frame_abstraction(
     let (corner1, corner2) = find_corners(&mask);
     let (centroid1, centroid2) = find_centroids(&mask, corner1, corner2);
     let mut centroids_hud = DynamicImage::ImageLuma8(mask.clone()).to_rgb8();
-    draw_centroids(&mut centroids_hud, corner1, corner2, centroid1, centroid2);
+    draw_centroids_hud(&mut centroids_hud, corner1, corner2, centroid1, centroid2);
 
     // Grow and enclose characters
     let char1 = grow_region(&mask, &centroid1, &corner1, &corner2);
@@ -329,7 +346,22 @@ pub fn get_frame_abstraction(
     let segmented_char1 = dilate(&segmented_char1, Norm::L1, char1_dilate_k);
     let segmented_char2 = dilate(&segmented_char2, Norm::L1, char2_dilate_k);
 
+    let (char1_centroid, char2_centroid) = if disjoint {
+        (
+            find_centroid(&segmented_char1, char1.corner1, char1.corner2),
+            find_centroid(&segmented_char2, char2.corner1, char2.corner2),
+        )
+    } else {
+        (
+            find_centroid(&segmented_char1, corner1, corner2),
+            find_centroid(&segmented_char2, corner1, corner2),
+        )
+    };
+
     let segmented_frame = merge_segmented_chars(segmented_char1, segmented_char2, char1, char2);
+
+    let frame_abstraction =
+        FrameAbstraction::new(segmented_frame.clone(), char1_centroid, char2_centroid);
 
     // Vision stages
     let mask = DynamicImage::ImageLuma8(mask).to_rgb8();
@@ -340,10 +372,8 @@ pub fn get_frame_abstraction(
         masked_frame,
         centroids_hud,
         chars_hud,
-        segmented_frame.clone(),
+        segmented_frame,
     );
-
-    let frame_abstraction = segmented_frame;
 
     // Discard bad abstractions
     //if get_detected_amount(&mask) < 0.02 {
@@ -352,9 +382,10 @@ pub fn get_frame_abstraction(
     //}
 
     //Down-size, so compute time doesn't explode
-    //let frame = DynamicImage::ImageRgb8(frame);
-    //let frame = frame.resize_exact(100, 100, image::imageops::FilterType::Lanczos3);
-    (Some(frame_abstraction), vision_stages)
+    //let frame_abstraction = DynamicImage::ImageRgb8(frame_abstraction);
+    //let frame_abstraction =
+    //    frame_abstraction.resize_exact(100, 100, image::imageops::FilterType::Nearest);
+    (frame_abstraction, vision_stages)
 }
 
 #[allow(dead_code)]
@@ -388,8 +419,8 @@ pub fn apply_thresholds(
     //let img = img.to_rgb8();
     let mut img_out = RgbImage::new(img.width(), img.height());
     // Avoid some annoying white dots at the right of the frame
-    //let width = max(img.width() - 1, 0);
-    for x in 0..img.width() {
+    let width = cmp::max(img.width() - 1, 0);
+    for x in 0..width {
         for y in 0..img.height() {
             let pixel = img.get_pixel(x, y);
             let r = if pixel[0] < red_thresholds[0] || pixel[0] > red_thresholds[1] {
@@ -467,60 +498,97 @@ fn find_centroids(
 ) -> ((u32, u32), (u32, u32)) {
     let half_x = corner1.0 + (corner2.0 - corner1.0) / 2 as u32;
 
-    // Centroid1
-    let mut centroid1 = (0, 0);
-    let mut max_count = 0;
-    for x in corner1.0..half_x {
-        let mut count = 0;
-        for y in corner1.1..corner2.1 {
-            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-        }
-        if count > max_count {
-            centroid1.0 = x;
-            max_count = count;
-        }
-    }
-    let mut max_count = 0;
-    for y in corner1.1..corner2.1 {
-        let mut count = 0;
-        for x in corner1.0..half_x {
-            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-        }
-        if count > max_count {
-            centroid1.1 = y;
-            max_count = count;
-        }
-    }
+    // In left half
+    let centroid1 = find_centroid(img, corner1, (half_x, corner2.1));
 
-    // Centroid2
-    let mut centroid2 = (0, 0);
-    let mut max_count = 0;
-    for x in half_x..corner2.0 {
-        let mut count = 0;
-        for y in corner1.1..corner2.1 {
-            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-        }
-        if count > max_count {
-            centroid2.0 = x;
-            max_count = count;
-        }
-    }
-    let mut max_count = 0;
-    for y in corner1.1..corner2.1 {
-        let mut count = 0;
-        for x in half_x..corner2.0 {
-            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-        }
-        if count > max_count {
-            centroid2.1 = y;
-            max_count = count;
-        }
-    }
+    //In right half
+    let centroid2 = find_centroid(img, (half_x, corner1.1), corner2);
+
+    //let mut centroid1 = (0, 0);
+    //let mut max_count = 0;
+    //for x in corner1.0..half_x {
+    //    let mut count = 0;
+    //    for y in corner1.1..corner2.1 {
+    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+    //    }
+    //    if count > max_count {
+    //        centroid1.0 = x;
+    //        max_count = count;
+    //    }
+    //}
+    //let mut max_count = 0;
+    //for y in corner1.1..corner2.1 {
+    //    let mut count = 0;
+    //    for x in corner1.0..half_x {
+    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+    //    }
+    //    if count > max_count {
+    //        centroid1.1 = y;
+    //        max_count = count;
+    //    }
+    //}
+
+    //// Centroid2
+    //let mut centroid2 = (0, 0);
+    //let mut max_count = 0;
+    //for x in half_x..corner2.0 {
+    //    let mut count = 0;
+    //    for y in corner1.1..corner2.1 {
+    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+    //    }
+    //    if count > max_count {
+    //        centroid2.0 = x;
+    //        max_count = count;
+    //    }
+    //}
+    //let mut max_count = 0;
+    //for y in corner1.1..corner2.1 {
+    //    let mut count = 0;
+    //    for x in half_x..corner2.0 {
+    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+    //    }
+    //    if count > max_count {
+    //        centroid2.1 = y;
+    //        max_count = count;
+    //    }
+    //}
 
     (centroid1, centroid2)
 }
 
-fn draw_centroids(
+fn find_centroid(img: &GrayImage, corner1: (u32, u32), corner2: (u32, u32)) -> (u32, u32) {
+    let mut centroid = (0, 0);
+    let mut max_count = 0;
+
+    // Column with most pixels
+    for x in corner1.0..corner2.0 {
+        let mut count = 0;
+        for y in corner1.1..corner2.1 {
+            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+        }
+        if count > max_count {
+            centroid.0 = x;
+            max_count = count;
+        }
+    }
+
+    // Rows with most pixels
+    let mut max_count = 0;
+    for y in corner1.1..corner2.1 {
+        let mut count = 0;
+        for x in corner1.0..corner2.0 {
+            count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
+        }
+        if count > max_count {
+            centroid.1 = y;
+            max_count = count;
+        }
+    }
+
+    centroid
+}
+
+fn draw_centroids_hud(
     img: &mut RgbImage,
     corner1: (u32, u32),
     corner2: (u32, u32),
@@ -584,8 +652,7 @@ pub fn draw_x_limits(img: &mut RgbImage, x_limits: (u32, u32)) {
     }
 }
 
-pub fn draw_border(img: &mut RgbImage) {
-    let color = Rgb([128, 0, 128]);
+pub fn draw_border(img: &mut RgbImage, color: Rgb<u8>) {
     for x in 0..img.width() {
         img.put_pixel(x, 0, color);
         img.put_pixel(x, img.height() - 1, color);
@@ -603,7 +670,7 @@ fn grow_region(
     corner2: &(u32, u32),
 ) -> Character {
     let mut mask_out = GrayImage::new(mask.width(), mask.height());
-    let mut region_corner1 = (mask.width(), mask.height());
+    let mut region_corner1 = (mask.width() - 1, mask.height() - 1);
     let mut region_corner2 = (0, 0);
 
     if mask.is_empty() {
@@ -885,4 +952,123 @@ pub fn add_to_trace(img: &RgbImage, trace: &RgbImage, amount: u8) -> RgbImage {
     }
 
     traced_img
+}
+
+pub fn draw_centroid(img: &mut RgbImage, centroid: (u32, u32), radius: u32) {
+    // Draw point
+    draw_filled_square(img, centroid, 2);
+
+    // Draw radius
+    draw_square(img, centroid, radius);
+}
+
+fn draw_filled_square(img: &mut RgbImage, centroid: (u32, u32), radius: u32) {
+    let corner1 = (
+        cmp::max(centroid.0 as i32 - radius as i32, 0) as u32,
+        cmp::max(centroid.1 as i32 - radius as i32, 0) as u32,
+    );
+    let corner2 = (
+        cmp::min(centroid.0 + radius, img.width() - 1),
+        cmp::min(centroid.1 + radius, img.height() - 1),
+    );
+
+    for x in corner1.0..corner2.0 {
+        for y in corner1.1..corner2.1 {
+            img.put_pixel(x, y, Rgb([0, 255, 0]));
+        }
+    }
+}
+
+fn draw_square(img: &mut RgbImage, centroid: (u32, u32), radius: u32) {
+    let corner1 = (
+        cmp::max(centroid.0 as i32 - radius as i32, 0) as u32,
+        cmp::max(centroid.1 as i32 - radius as i32, 0) as u32,
+    );
+    let corner2 = (
+        cmp::min(centroid.0 + radius, img.width() - 1),
+        cmp::min(centroid.1 + radius, img.height() - 1),
+    );
+    for x in corner1.0..corner2.0 {
+        img.put_pixel(x, corner1.1, Rgb([0, 255, 0]));
+        img.put_pixel(x, corner2.1, Rgb([0, 255, 0]));
+    }
+    for y in corner1.1..corner2.1 {
+        img.put_pixel(corner1.0, y, Rgb([0, 255, 0]));
+        img.put_pixel(corner2.0, y, Rgb([0, 255, 0]));
+    }
+
+    //// Top edge
+    //let min_y = (centroid.1 as i32 - radius);
+    //if min_y >= 0 {
+    //    for dx in -radius..radius {
+    //        let x = centroid.0 as i32 + dx;
+    //        if x >= 0 && x < img.width() as i32 {
+    //            img.put_pixel(x as u32, min_y as u32, Rgb([0, 255, 0]));
+    //        }
+    //    }
+    //}
+
+    //// Bottom edge
+    //let max_y = (centroid.1 as i32 + radius);
+    //if max_y < img.height() {
+    //    for dx in -radius..radius {
+    //        let x = centroid.0 as i32 + dx;
+    //        if x >= 0 && x < img.width() as i32 {
+    //            img.put_pixel(x as u32, max_y as u32, Rgb([0, 255, 0]));
+    //        }
+    //    }
+    //}
+
+    //// Left edge
+    //let min_x = (centroid.0 as i32 - radius);
+    //if min_x >= 0 {
+    //    for dy in -radius..radius {
+    //        let y = centroid.1 as i32 + dy;
+    //        if y >= 0 && y < img.height() as i32 {
+    //            img.put_pixel(min_x as u32, y as u32, Rgb([0, 255, 0]));
+    //        }
+    //    }
+    //}
+
+    //// Right edge
+    //let max_x = (centroid.0 as i32 + radius);
+    //if max_x < img.widht() {
+    //    for dy in -radius..radius {
+    //        let y = centroid.1 as i32 + dy;
+    //        if y >= 0 && x < img.height() as i32 {
+    //            img.put_pixel(min_x as u32, y as u32, Rgb([0, 255, 0]));
+    //        }
+    //    }
+    //}
+}
+
+pub fn compute_mse(img1: &RgbImage, img2: &RgbImage) -> f64 {
+    // Ensure images have the same dimensions
+    if img1.dimensions() != img2.dimensions() {
+        panic!("Images must have the same dimensions for MSE calculation");
+    }
+
+    // Initialize the error sum
+    let mut error_sum = 0u64;
+    let (width, height) = img1.dimensions();
+
+    // Iterate over each pixel
+    for y in 0..height {
+        for x in 0..width {
+            // Get RGB values for each pixel
+            let p1 = img1.get_pixel(x, y);
+            let p2 = img2.get_pixel(x, y);
+
+            // Calculate squared difference for each channel and add to the sum
+            for channel in 0..3 {
+                // 0 = R, 1 = G, 2 = B
+                let diff = p1[channel] as i32 - p2[channel] as i32;
+                error_sum += (diff * diff) as u64;
+            }
+        }
+    }
+
+    // Calculate mean of the squared differences across all pixels and channels
+    let total_pixels = (width * height * 3) as f64; // 3 channels per pixel
+    error_sum as f64 / total_pixels
 }

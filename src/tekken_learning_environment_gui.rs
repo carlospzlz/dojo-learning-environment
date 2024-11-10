@@ -116,7 +116,7 @@ struct MyApp {
     green_thresholds: [u8; 2],
     blue_thresholds: [u8; 2],
     dilate_k: u8,
-    max_mse: f32,
+    max_mse: f64,
     char1_pixel_probability: HashMap<Rgb<u8>, (u64, u64)>,
     char2_pixel_probability: HashMap<Rgb<u8>, (u64, u64)>,
     char1_probability_threshold: f64,
@@ -125,12 +125,16 @@ struct MyApp {
     char2_dilate_k: u8,
     previous_trace_abstraction: RgbImage,
     trace: u8,
+    radius: u32,
 }
 
 impl MyApp {
     fn new(_cc: &eframe::CreationContext<'_>, bios: String, game: String) -> Self {
         let mut system = System::new(&bios, &game);
         system.reset();
+        let radius = 30;
+        let mut agent = Agent::new();
+        agent.set_radius(radius);
         Self {
             bios,
             game,
@@ -146,8 +150,8 @@ impl MyApp {
             agent_life_info: LifeInfo::default(),
             opponent_life_info: LifeInfo::default(),
             replay: None,
-            agent: Agent::new(),
-            observation_frequency: 20,
+            agent,
+            observation_frequency: 10,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
@@ -156,7 +160,7 @@ impl MyApp {
             green_thresholds: [15, 165],
             blue_thresholds: [15, 156],
             dilate_k: 12,
-            max_mse: 0.04,
+            max_mse: 2000.0,
             char1_pixel_probability: HashMap::new(),
             char2_pixel_probability: HashMap::new(),
             char1_probability_threshold: 0.7,
@@ -165,6 +169,7 @@ impl MyApp {
             char2_dilate_k: 2,
             previous_trace_abstraction: RgbImage::default(),
             trace: 6,
+            radius,
         }
     }
 }
@@ -486,55 +491,16 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Cmp:");
                 ui.end_row();
-                ui.label("MSE");
-                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=3.0).max_decimals(3));
-            });
-            ui.horizontal(|_ui| {});
-
-            // Reinforcement Learning
-            ui.horizontal(|ui| {
-                ui.label("Reinforcement Learning");
-                let separator = egui::Separator::default();
-                ui.add(separator.horizontal());
-            });
-            egui::Grid::new("reinforcement_learning").show(ui, |ui| {
-                ui.label("Learning Rate:");
-                let learning_rate_widget = egui::DragValue::new(&mut self.learning_rate);
-                let learning_rate_widget = learning_rate_widget.speed(0.01).clamp_range(0..=1);
-                ui.add(learning_rate_widget);
+                ui.label("Radius");
+                if ui
+                    .add(egui::Slider::new(&mut self.radius, 0..=255))
+                    .changed()
+                {
+                    self.agent.set_radius(self.radius);
+                }
                 ui.end_row();
-                ui.label("Discount Factor:");
-                let discount_factor_widget = egui::DragValue::new(&mut self.discount_factor);
-                let discount_factor_widget = discount_factor_widget.speed(0.01).clamp_range(0..=1);
-                ui.add(discount_factor_widget);
-            });
-            ui.horizontal(|_ui| {});
-            ui.horizontal(|ui| {
-                // Emulator Controls
-                if ui.button("Start").clicked() {
-                    if self.current_combat.is_none() {
-                        self.load_current_combat();
-                    }
-                    self.is_running = true;
-                }
-                if ui.button("Stop").clicked() {
-                    self.is_running = false;
-                }
-                if ui.button("Next").clicked() {
-                    if !self.is_running {
-                        self.process_frame();
-                        // Apparently this is not needed, it actually seems
-                        // to produce some unsynching
-                        //ctx.request_repaint();
-                    }
-                }
-            });
-            ui.horizontal(|_ui| {});
-            // Simulation
-            ui.horizontal(|ui| {
-                ui.label("Simulation");
-                let separator = egui::Separator::default();
-                ui.add(separator.horizontal());
+                ui.label("MSE");
+                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=10000.0).max_decimals(3));
             });
         });
     }
@@ -621,6 +587,53 @@ impl MyApp {
                     format!("{}", self.agent.get_number_of_previous_next_states());
                 ui.label(previous_next_states);
             });
+            ui.horizontal(|_ui| {});
+
+            // Reinforcement Learning
+            ui.horizontal(|ui| {
+                ui.label("Reinforcement Learning");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
+            egui::Grid::new("reinforcement_learning").show(ui, |ui| {
+                ui.label("Learning Rate:");
+                let learning_rate_widget = egui::DragValue::new(&mut self.learning_rate);
+                let learning_rate_widget = learning_rate_widget.speed(0.01).clamp_range(0..=1);
+                ui.add(learning_rate_widget);
+                ui.end_row();
+                ui.label("Discount Factor:");
+                let discount_factor_widget = egui::DragValue::new(&mut self.discount_factor);
+                let discount_factor_widget = discount_factor_widget.speed(0.01).clamp_range(0..=1);
+                ui.add(discount_factor_widget);
+            });
+            ui.horizontal(|_ui| {});
+            ui.horizontal(|ui| {
+                // Emulator Controls
+                if ui.button("Start").clicked() {
+                    if self.current_combat.is_none() {
+                        self.load_current_combat();
+                    }
+                    self.is_running = true;
+                }
+                if ui.button("Stop").clicked() {
+                    self.is_running = false;
+                }
+                if ui.button("Next").clicked() {
+                    if !self.is_running {
+                        self.process_frame();
+                        // Apparently this is not needed, it actually seems
+                        // to produce some unsynching
+                        //ctx.request_repaint();
+                    }
+                }
+            });
+            ui.horizontal(|_ui| {});
+            // Simulation
+            ui.horizontal(|ui| {
+                ui.label("Simulation");
+                let separator = egui::Separator::default();
+                ui.add(separator.horizontal());
+            });
         });
     }
 
@@ -655,7 +668,7 @@ impl MyApp {
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
         if self.time_from_last_observation > period {
             // VISION PIPELINE
-            let (frame_abstraction, vision_stages) = vision::get_frame_abstraction(
+            let (mut frame_abstraction, vision_stages) = vision::get_frame_abstraction(
                 &self.frame.clone(),
                 self.red_thresholds,
                 self.green_thresholds,
@@ -668,21 +681,25 @@ impl MyApp {
                 self.char1_dilate_k,
                 self.char2_dilate_k,
             );
-            let frame_abstraction = frame_abstraction.unwrap();
             if self.previous_trace_abstraction.is_empty() {
-                self.previous_trace_abstraction =
-                    RgbImage::new(frame_abstraction.width(), frame_abstraction.height())
+                self.previous_trace_abstraction = RgbImage::new(
+                    frame_abstraction.frame.width(),
+                    frame_abstraction.frame.height(),
+                )
             };
             let trace_abstraction = vision::add_to_trace(
-                &frame_abstraction,
+                &frame_abstraction.frame,
                 &self.previous_trace_abstraction,
                 self.trace,
             );
             self.previous_trace_abstraction = trace_abstraction.clone();
+            frame_abstraction.frame = trace_abstraction;
 
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
-            let action = self.agent.visit_state(Some(trace_abstraction), reward);
+            let action = self
+                .agent
+                .visit_state(frame_abstraction, reward, self.max_mse);
             self.last_vision_stages = vision_stages;
             self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
