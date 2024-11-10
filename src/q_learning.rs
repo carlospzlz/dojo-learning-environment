@@ -18,6 +18,8 @@ pub struct Agent {
     number_of_revisited_states: usize,
     discount_factor: f32,
     learning_rate: f32,
+    iteration_number: u32,
+    states_per_iteration: Vec<[f64; 2]>,
 }
 
 #[derive(Clone)]
@@ -50,6 +52,8 @@ impl Agent {
             number_of_revisited_states: 0,
             discount_factor: 0.9,
             learning_rate: 0.5,
+            iteration_number: 0,
+            states_per_iteration: Vec::<[f64; 2]>::new(),
         }
     }
 
@@ -108,7 +112,7 @@ impl Agent {
             //}
         }
 
-        // Heart of Q-Learning
+       // Heart of Q-Learning
         if let Some(previous_index) = self.previous_index {
             //let reward = (reward + 1.0) / 2.0;
             //print!("Reward: {}\t", reward);
@@ -121,6 +125,11 @@ impl Agent {
                 previous_state.q[act] + self.learning_rate * temporal_difference;
             //println!("Next: {}", previous_state.q[act]);
         }
+
+        let iteration_number = self.iteration_number as f64;
+        let number_of_states = self.states.len() as f64;
+        self.states_per_iteration.push([iteration_number, number_of_states]);
+        self.iteration_number += 1;
 
         self.previous_index = Some(current_index);
         self.previous_action = Some(current_action);
@@ -238,6 +247,10 @@ impl Agent {
 
     pub fn set_radius(&mut self, radius: u32) {
         self.radius = radius;
+    }
+
+    pub fn get_states_per_iteration(&self) -> Vec<[f64; 2]> {
+        return self.states_per_iteration.clone();
     }
 }
 

@@ -1,3 +1,4 @@
+use egui::plot::{Line, Plot, PlotPoints};
 use egui::{Color32, ColorImage};
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
@@ -126,6 +127,7 @@ struct MyApp {
     previous_trace_abstraction: RgbImage,
     trace: u8,
     radius: u32,
+    show_states_plot: bool,
 }
 
 impl MyApp {
@@ -170,6 +172,7 @@ impl MyApp {
             previous_trace_abstraction: RgbImage::default(),
             trace: 6,
             radius,
+            show_states_plot: false,
         }
     }
 }
@@ -177,6 +180,8 @@ impl MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let start_time = Instant::now();
+        self.menu_bar(ctx);
+        self.show_states_plot(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
         self.bottom_panel(ctx);
@@ -211,6 +216,31 @@ impl eframe::App for MyApp {
 }
 
 impl MyApp {
+    fn menu_bar(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Load Agent").clicked() {
+                        println!("Open clicked");
+                        ui.close_menu();
+                    }
+                    if ui.button("Save Agent").clicked() {
+                        println!("Save clicked");
+                        ui.close_menu();
+                    }
+                });
+
+                // Additional menus can be added here, like Edit, View, etc.
+                ui.menu_button("Advanced", |ui| {
+                    if ui.button("Open States Plot").clicked() {
+                        self.show_states_plot = true;
+                        ui.close_menu();
+                    }
+                });
+            });
+        });
+    }
+
     fn central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Fill all available space
@@ -361,12 +391,13 @@ impl MyApp {
 
     fn left_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
+            ui.horizontal(|_ui| {});
             // General
-            ui.horizontal(|ui| {
-                ui.label("General");
-                let separator = egui::Separator::default();
-                ui.add(separator.horizontal());
-            });
+            //ui.horizontal(|ui| {
+            //    ui.label("General");
+            //    let separator = egui::Separator::default();
+            //    ui.add(separator.horizontal());
+            //});
             egui::Grid::new("general_options").show(ui, |ui| {
                 ui.label("AI agent:");
                 egui::ComboBox::from_id_source("agent_character")
@@ -522,11 +553,12 @@ impl MyApp {
 
     fn right_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Profiling");
-                let separator = egui::Separator::default();
-                ui.add(separator.horizontal());
-            });
+            ui.horizontal(|_ui| {});
+            //ui.horizontal(|ui| {
+            //    ui.label("Profiling");
+            //    let separator = egui::Separator::default();
+            //    ui.add(separator.horizontal());
+            //});
             egui::Grid::new("profiling").show(ui, |ui| {
                 ui.label("FPS:");
                 if self.frame_time.total_time.as_millis() > 0 {
@@ -636,6 +668,24 @@ impl MyApp {
                 ui.add(separator.horizontal());
             });
         });
+    }
+
+    fn show_states_plot(&mut self, ctx: &egui::Context) {
+        if self.show_states_plot {
+            egui::Window::new("States")
+                .open(&mut self.show_states_plot) // Bind visibility to flag
+                .show(ctx, |ui| {
+                    ui.label("States per iteration");
+
+                    // Create plot from states per iteration
+                    let states_per_iteration = self.agent.get_states_per_iteration();
+                    let points = PlotPoints::from_iter(states_per_iteration);
+                    let line = Line::new(points);
+                    Plot::new("states_per_iteration")
+                        .view_aspect(2.0)
+                        .show(ui, |plot_ui| plot_ui.line(line));
+                });
+        }
     }
 
     fn process_frame(&mut self) {
