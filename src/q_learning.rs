@@ -161,7 +161,7 @@ impl Agent {
                 let frame = &state.frame_abstraction.frame;
                 let other_frame = &candidate.frame_abstraction.frame;
                 let mse = vision::compute_mse(frame, other_frame);
-                println!("MSE {}", mse);
+                //println!("MSE {}", mse);
                 if mse < max_mse {
                     return Some(i);
                 }
@@ -209,7 +209,7 @@ impl Agent {
             vision::draw_centroid(&mut frame, char1_centroid, self.radius);
             vision::draw_centroid(&mut frame, char2_centroid, self.radius);
             if self.revisited {
-                println!("{} / {}", index, self.states.len());
+                //println!("{} / {}", index, self.states.len());
                 if index == (self.states.len() - 1) {
                     vision::draw_border(&mut frame, Rgb([128, 0, 0]));
                 } else {

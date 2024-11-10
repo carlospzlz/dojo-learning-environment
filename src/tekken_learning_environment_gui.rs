@@ -177,9 +177,9 @@ impl MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let start_time = Instant::now();
-        self.bottom_panel(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
+        self.bottom_panel(ctx);
         self.central_panel(ctx);
         self.frame_time.ui_time = Instant::now() - start_time;
 
@@ -438,9 +438,8 @@ impl MyApp {
                 let separator = egui::Separator::default();
                 ui.add(separator.horizontal());
             });
-            egui::Grid::new("vision_pipeline").show(ui, |ui| {
-                ui.label("Contrast:");
-                ui.end_row();
+            ui.label("Contrast Thresholds");
+            egui::Grid::new("contrast_thresholds").show(ui, |ui| {
                 ui.label("Red");
                 ui.horizontal(|ui| {
                     ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
@@ -458,15 +457,15 @@ impl MyApp {
                     ui.add(egui::DragValue::new(&mut self.blue_thresholds[0]));
                     ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
                 });
-                ui.end_row();
-                ui.label("Mask:");
-                ui.end_row();
+            });
+            ui.label("Contrast Mask");
+            egui::Grid::new("contrast_mask").show(ui, |ui| {
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
-                ui.end_row();
-                ui.label("Char1:");
-                ui.end_row();
-                ui.label("Threshold");
+            });
+            ui.label("Character 1");
+            egui::Grid::new("char1").show(ui, |ui| {
+                ui.label("Thres.");
                 ui.add(egui::Slider::new(
                     &mut self.char1_probability_threshold,
                     0.0..=1.0,
@@ -474,10 +473,10 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.char1_dilate_k, 0..=20));
-                ui.end_row();
-                ui.label("Char2:");
-                ui.end_row();
-                ui.label("Threshold");
+            });
+            ui.label("Character 2");
+            egui::Grid::new("char2").show(ui, |ui| {
+                ui.label("Thres.");
                 ui.add(egui::Slider::new(
                     &mut self.char2_probability_threshold,
                     0.0..=1.0,
@@ -485,12 +484,14 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Dilate");
                 ui.add(egui::Slider::new(&mut self.char2_dilate_k, 0..=20));
-                ui.end_row();
+            });
+            ui.label("Motion");
+            egui::Grid::new("motion").show(ui, |ui| {
                 ui.label("Trace");
                 ui.add(egui::Slider::new(&mut self.trace, 0..=255));
-                ui.end_row();
-                ui.label("Cmp:");
-                ui.end_row();
+            });
+            ui.label("State Comparison");
+            egui::Grid::new("state_comparison").show(ui, |ui| {
                 ui.label("Radius");
                 if ui
                     .add(egui::Slider::new(&mut self.radius, 0..=255))
