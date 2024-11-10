@@ -1,4 +1,5 @@
 use egui::{Color32, ColorImage};
+use egui_extras::{TabBar, TabView};
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
 use std::collections::HashMap;
@@ -266,6 +267,17 @@ impl MyApp {
 
     fn bottom_panel(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::bottom("my_bottom_panel").show(ctx, |ui| {
+            TabBar::new("my_tabs").show(ui, |ui| {
+                ui.tab("Home", |ui| {
+                    ui.label("This is the Home tab.");
+                });
+                ui.tab("Settings", |ui| {
+                    ui.label("Settings tab content goes here.");
+                });
+                ui.tab("About", |ui| {
+                    ui.label("About information is displayed here.");
+                });
+            });
             let asize = ui.available_size();
             let available_width = asize[0];
             let controller_half_size = 50.0;
@@ -438,69 +450,71 @@ impl MyApp {
                 let separator = egui::Separator::default();
                 ui.add(separator.horizontal());
             });
-            egui::Grid::new("vision_pipeline").show(ui, |ui| {
-                ui.label("Contrast:");
-                ui.end_row();
-                ui.label("Red");
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
-                    ui.add(egui::DragValue::new(&mut self.red_thresholds[1]));
+            ui.collapsing("Vision Pipeline", |ui| {
+                egui::Grid::new("vision_pipeline").show(ui, |ui| {
+                    ui.label("Contrast:");
+                    ui.end_row();
+                    ui.label("Red");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.red_thresholds[0]));
+                        ui.add(egui::DragValue::new(&mut self.red_thresholds[1]));
+                    });
+                    ui.end_row();
+                    ui.label("Green");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.green_thresholds[0]));
+                        ui.add(egui::DragValue::new(&mut self.green_thresholds[1]));
+                    });
+                    ui.end_row();
+                    ui.label("Blue");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut self.blue_thresholds[0]));
+                        ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
+                    });
+                    ui.end_row();
+                    ui.label("Mask:");
+                    ui.end_row();
+                    ui.label("Dilate");
+                    ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
+                    ui.end_row();
+                    ui.label("Char1:");
+                    ui.end_row();
+                    ui.label("Threshold");
+                    ui.add(egui::Slider::new(
+                        &mut self.char1_probability_threshold,
+                        0.0..=1.0,
+                    ));
+                    ui.end_row();
+                    ui.label("Dilate");
+                    ui.add(egui::Slider::new(&mut self.char1_dilate_k, 0..=20));
+                    ui.end_row();
+                    ui.label("Char2:");
+                    ui.end_row();
+                    ui.label("Threshold");
+                    ui.add(egui::Slider::new(
+                        &mut self.char2_probability_threshold,
+                        0.0..=1.0,
+                    ));
+                    ui.end_row();
+                    ui.label("Dilate");
+                    ui.add(egui::Slider::new(&mut self.char2_dilate_k, 0..=20));
+                    ui.end_row();
+                    ui.label("Trace");
+                    ui.add(egui::Slider::new(&mut self.trace, 0..=255));
+                    ui.end_row();
+                    ui.label("Cmp:");
+                    ui.end_row();
+                    ui.label("Radius");
+                    if ui
+                        .add(egui::Slider::new(&mut self.radius, 0..=255))
+                        .changed()
+                    {
+                        self.agent.set_radius(self.radius);
+                    }
+                    ui.end_row();
+                    ui.label("MSE");
+                    ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=10000.0).max_decimals(3));
                 });
-                ui.end_row();
-                ui.label("Green");
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.green_thresholds[0]));
-                    ui.add(egui::DragValue::new(&mut self.green_thresholds[1]));
-                });
-                ui.end_row();
-                ui.label("Blue");
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.blue_thresholds[0]));
-                    ui.add(egui::DragValue::new(&mut self.blue_thresholds[1]));
-                });
-                ui.end_row();
-                ui.label("Mask:");
-                ui.end_row();
-                ui.label("Dilate");
-                ui.add(egui::Slider::new(&mut self.dilate_k, 0..=20));
-                ui.end_row();
-                ui.label("Char1:");
-                ui.end_row();
-                ui.label("Threshold");
-                ui.add(egui::Slider::new(
-                    &mut self.char1_probability_threshold,
-                    0.0..=1.0,
-                ));
-                ui.end_row();
-                ui.label("Dilate");
-                ui.add(egui::Slider::new(&mut self.char1_dilate_k, 0..=20));
-                ui.end_row();
-                ui.label("Char2:");
-                ui.end_row();
-                ui.label("Threshold");
-                ui.add(egui::Slider::new(
-                    &mut self.char2_probability_threshold,
-                    0.0..=1.0,
-                ));
-                ui.end_row();
-                ui.label("Dilate");
-                ui.add(egui::Slider::new(&mut self.char2_dilate_k, 0..=20));
-                ui.end_row();
-                ui.label("Trace");
-                ui.add(egui::Slider::new(&mut self.trace, 0..=255));
-                ui.end_row();
-                ui.label("Cmp:");
-                ui.end_row();
-                ui.label("Radius");
-                if ui
-                    .add(egui::Slider::new(&mut self.radius, 0..=255))
-                    .changed()
-                {
-                    self.agent.set_radius(self.radius);
-                }
-                ui.end_row();
-                ui.label("MSE");
-                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=10000.0).max_decimals(3));
             });
         });
     }
