@@ -32,7 +32,7 @@ pub struct FrameAbstraction {
 }
 
 impl FrameAbstraction {
-    fn new(frame: RgbImage, char1_centroid: (u32, u32), char2_centroid: (u32, u32)) -> Self {
+    pub fn new(frame: RgbImage, char1_centroid: (u32, u32), char2_centroid: (u32, u32)) -> Self {
         Self {
             frame,
             char1_centroid,

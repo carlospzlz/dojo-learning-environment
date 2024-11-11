@@ -4,6 +4,8 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -16,6 +18,7 @@ use super::vision;
 pub struct Agent {
     states: Vec<State>,
     states_index: HashMap<(u32, u32), Vec<usize>>,
+    number_of_states: usize,
     radius: u32,
     revisited: bool,
     previous_index: Option<usize>,
@@ -49,6 +52,7 @@ impl Agent {
     pub fn new() -> Self {
         Self {
             states: Vec::<State>::new(),
+            number_of_states: 0,
             states_index: HashMap::<(u32, u32), Vec<usize>>::new(),
             radius: 30,
             revisited: false,
@@ -101,6 +105,7 @@ impl Agent {
             let mut rng = rand::thread_rng();
             current_action = rng.gen_range(0..=255);
             max_q = 0.0;
+            self.number_of_states = self.states.len();
             self.revisited = false;
             // Index
             //if let Some(vector) = self.states_index.get_mut(&x_limits) {
@@ -297,7 +302,7 @@ fn choose_best_action(state: &State) -> (u8, f32) {
 
 #[derive(Serialize, Deserialize)]
 struct SerDesAgent {
-    number_of_revisited_states: usize,
+    number_of_states: usize,
     iteration_number: u32,
     training_time: Duration,
 }
@@ -305,7 +310,7 @@ struct SerDesAgent {
 impl SerDesAgent {
     pub fn new(agent: &Agent) -> Self {
         Self {
-            number_of_revisited_states: agent.number_of_revisited_states,
+            number_of_states: agent.number_of_states,
             iteration_number: agent.iteration_number,
             training_time: agent.training_time,
         }
@@ -324,20 +329,32 @@ pub fn save_agent(agent: &Agent, path: &str) {
         return;
     }
 
-    // States
-    let _ = fs::create_dir_all(agent_path.join("frames"));
-    for (i, state) in agent.states.iter().enumerate() {
-        state
-            .frame_abstraction
-            .frame
-            .save(format!("{}/frames/{:06}.png", path, i))
-            .expect("Failed to save frame");
-    }
-
     // Serializable data from agent
     let agent_file = fs::File::create(agent_path.join("agent.json")).unwrap();
     let ser_des_agent = SerDesAgent::new(agent);
     let _ = serde_json::to_writer_pretty(agent_file, &ser_des_agent);
+
+    // States
+    let frames_path = agent_path.join("frames");
+    let _ = fs::create_dir_all(frames_path.clone());
+    let mut data = fs::File::create(frames_path.join("data.csv")).unwrap();
+    for (i, state) in agent.states.iter().enumerate() {
+        let frame_path = frames_path.join(format!("{:06}.png", i));
+        state
+            .frame_abstraction
+            .frame
+            .save(frame_path.clone())
+            .expect("Failed to save frame");
+        writeln!(
+            data,
+            "{},{},{},{},{}",
+            frame_path.file_name().unwrap().to_string_lossy(),
+            state.frame_abstraction.char1_centroid.0,
+            state.frame_abstraction.char1_centroid.1,
+            state.frame_abstraction.char2_centroid.0,
+            state.frame_abstraction.char2_centroid.1,
+        );
+    }
 
     // States per iteration
     let mut states_per_iteration_file =
@@ -349,49 +366,63 @@ pub fn save_agent(agent: &Agent, path: &str) {
 
 pub fn load_agent(path: &str) -> Agent {
     println!("Loading agent from {}...", path);
-    Agent::new()
-}
 
-//#[allow(dead_code)]
-//fn parallel_linear_search(data: Vec<State>, target: RgbImage, max_mse: f32) -> Option<usize> {
-//    if data.len() < 8 {
-//        return None;
-//    }
-//    let data = Arc::new(data);
-//    let result = Arc::new(Mutex::new(None::<(usize, f32)>));
-//    let target = Arc::new(target);
-//
-//    let chunk_size = data.len() / 8;
-//    let mut handles = vec![];
-//
-//    for i in 0..8 {
-//        let data_clone = Arc::clone(&data);
-//        let result_clone = Arc::clone(&result);
-//        let target_clone = Arc::clone(&target);
-//        let handle = thread::spawn(move || {
-//            let chunk = data_clone.chunks(chunk_size).nth(i).unwrap();
-//            for (index, &ref state) in chunk.iter().enumerate() {
-//                let mse = vision::get_mse(&state.frame_abstraction, &target_clone);
-//                if mse < max_mse {
-//                    // Lock the mutex to check/update result
-//                    let mut result = result_clone.lock().unwrap();
-//                    if result.is_none() || mse < result.unwrap().1 {
-//                        *result = Some((i * chunk_size + index, mse));
-//                    }
-//                }
-//            }
-//        });
-//        handles.push(handle);
-//    }
-//
-//    for handle in handles {
-//        handle.join().unwrap();
-//    }
-//
-//    let result = result.lock().unwrap();
-//    if let Some(local_result) = *result {
-//        return Some(local_result.0);
-//    }
-//
-//    None
-//}
+    let agent_path = Path::new(path);
+
+    if !agent_path.exists() {
+        println!("Path doesn't exist: {}", path);
+        return Agent::new();
+    }
+
+    // Deserializable data to agent
+    let agent_file = fs::File::open(agent_path.join("agent.json")).unwrap();
+    let reader = BufReader::new(agent_file);
+    let ser_des_agent: SerDesAgent = serde_json::from_reader(reader).unwrap();
+
+    // Read states
+    let mut states = Vec::<State>::new();
+    let frames_path = agent_path.join("frames");
+    let mut data = fs::File::open(frames_path.join("data.csv")).unwrap();
+    let reader = BufReader::new(data);
+    for line in reader.lines() {
+        let line = line.unwrap();
+        let tokens: Vec<&str> = line.split(',').collect();
+        let frame_path = frames_path.join(tokens[0].to_string());
+        let frame = image::open(&frame_path).unwrap().to_rgb8();
+        let char1_centroid: (u32, u32) = (
+            tokens[1].trim().parse().unwrap(),
+            tokens[2].trim().parse().unwrap(),
+        );
+        let char2_centroid: (u32, u32) = (
+            tokens[3].trim().parse().unwrap(),
+            tokens[4].trim().parse().unwrap(),
+        );
+        let frame_abstraction =
+            vision::FrameAbstraction::new(frame, char1_centroid, char2_centroid);
+        let state = State::new(frame_abstraction);
+        states.push(state);
+    }
+
+    // States per iteration
+    let mut states_per_iteration = Vec::<[f64; 2]>::new();
+    let states_per_iteration_file =
+        fs::File::open(agent_path.join("states_per_iteration.csv")).unwrap();
+    let reader = BufReader::new(states_per_iteration_file);
+    for line in reader.lines() {
+        let line = line.unwrap();
+        let tokens: Vec<&str> = line.split(',').collect();
+        let iteration_number: f64 = tokens[0].trim().parse().unwrap();
+        let number_of_states: f64 = tokens[1].trim().parse().unwrap();
+        states_per_iteration.push([iteration_number, number_of_states]);
+    }
+
+    // Build agent
+    let mut agent = Agent::new();
+    agent.number_of_states = ser_des_agent.number_of_states;
+    agent.iteration_number = ser_des_agent.iteration_number;
+    agent.training_time = ser_des_agent.training_time;
+    agent.states = states;
+    agent.states_per_iteration = states_per_iteration;
+
+    agent
+}

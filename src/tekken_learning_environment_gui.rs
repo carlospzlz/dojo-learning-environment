@@ -228,7 +228,11 @@ impl eframe::App for MyApp {
         ctx.request_repaint();
 
         self.frame_time.total_time = Instant::now() - start_time;
-        self.agent.add_training_time(self.frame_time.total_time);
+
+        // Update traning time
+        if self.is_running || self.is_running_next_frame {
+            self.agent.add_training_time(self.frame_time.total_time);
+        }
     }
 }
 
@@ -239,7 +243,7 @@ impl MyApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Load Agent").clicked() {
                         self.is_running = false;
-                        let dialog = FileDialog::open_file(self.opened_agent.clone());
+                        let dialog = FileDialog::select_folder(self.opened_agent.clone());
                         let dialog = dialog.title("Load Agent");
                         let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
                         dialog.open();
