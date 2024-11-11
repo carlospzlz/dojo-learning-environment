@@ -1,7 +1,12 @@
 use image::{Rgb, RgbImage};
 use log::warn;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -288,6 +293,63 @@ fn choose_best_action(state: &State) -> (u8, f32) {
     }
     let mut rng = rand::thread_rng();
     (rng.gen_range(0..=255), max_q)
+}
+
+#[derive(Serialize, Deserialize)]
+struct SerDesAgent {
+    number_of_revisited_states: usize,
+    iteration_number: u32,
+    training_time: Duration,
+}
+
+impl SerDesAgent {
+    pub fn new(agent: &Agent) -> Self {
+        Self {
+            number_of_revisited_states: agent.number_of_revisited_states,
+            iteration_number: agent.iteration_number,
+            training_time: agent.training_time,
+        }
+    }
+}
+
+pub fn save_agent(agent: &Agent, path: &str) {
+    println!("Saving agent to {}...", path);
+
+    let agent_path = Path::new(path);
+
+    if !agent_path.exists() {
+        let _ = fs::create_dir_all(agent_path);
+    } else {
+        println!("Path already exists: {}", path);
+        return;
+    }
+
+    // States
+    let _ = fs::create_dir_all(agent_path.join("frames"));
+    for (i, state) in agent.states.iter().enumerate() {
+        state
+            .frame_abstraction
+            .frame
+            .save(format!("{}/frames/{:06}.png", path, i))
+            .expect("Failed to save frame");
+    }
+
+    // Serializable data from agent
+    let agent_file = fs::File::create(agent_path.join("agent.json")).unwrap();
+    let ser_des_agent = SerDesAgent::new(agent);
+    let _ = serde_json::to_writer_pretty(agent_file, &ser_des_agent);
+
+    // States per iteration
+    let mut states_per_iteration_file =
+        fs::File::create(agent_path.join("states_per_iteration.csv")).unwrap();
+    for values in agent.states_per_iteration.iter() {
+        writeln!(states_per_iteration_file, "{}, {}", values[0], values[1]);
+    }
+}
+
+pub fn load_agent(path: &str) -> Agent {
+    println!("Loading agent from {}...", path);
+    Agent::new()
 }
 
 //#[allow(dead_code)]

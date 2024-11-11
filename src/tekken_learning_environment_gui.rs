@@ -1,11 +1,13 @@
 use egui::plot::{Line, Plot, PlotPoints};
-use egui::{Color32, ColorImage};
+use egui::{Color32, ColorImage, Vec2};
+use egui_file::FileDialog;
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 // Utils to "see" the screen
@@ -98,6 +100,7 @@ struct MyApp {
     system: System,
     frame: RgbImage,
     is_running: bool,
+    is_running_next_frame: bool,
     last_vision_stages: vision::VisionStages,
     vision: Vision,
     split_view: bool,
@@ -128,6 +131,10 @@ struct MyApp {
     trace: u8,
     radius: u32,
     show_states_plot: bool,
+    opened_agent: Option<PathBuf>,
+    open_file_dialog: Option<FileDialog>,
+    saved_file: Option<PathBuf>,
+    save_file_dialog: Option<FileDialog>,
 }
 
 impl MyApp {
@@ -143,6 +150,7 @@ impl MyApp {
             system,
             frame: RgbImage::default(),
             is_running: false,
+            is_running_next_frame: false,
             last_vision_stages: vision::VisionStages::default(),
             vision: Vision::Agent,
             split_view: true,
@@ -173,6 +181,10 @@ impl MyApp {
             trace: 6,
             radius,
             show_states_plot: false,
+            opened_agent: None,
+            open_file_dialog: None,
+            saved_file: None,
+            save_file_dialog: None,
         }
     }
 }
@@ -186,14 +198,14 @@ impl eframe::App for MyApp {
         self.right_panel(ctx);
         self.bottom_panel(ctx);
         self.central_panel(ctx);
+        self.file_dialogs(ctx);
         self.frame_time.ui_time = Instant::now() - start_time;
 
         // Processing
         if self.is_running {
             self.process_frame();
-
-            // Request repaint
-            ctx.request_repaint()
+        } else if self.is_running_next_frame {
+            self.is_running_next_frame = !self.process_frame();
         } else {
             // Even if not running update vision
             let (_, vision_stages) = vision::get_frame_abstraction(
@@ -211,6 +223,10 @@ impl eframe::App for MyApp {
             );
             self.last_vision_stages = vision_stages;
         }
+
+        // Request repaint
+        ctx.request_repaint();
+
         self.frame_time.total_time = Instant::now() - start_time;
         self.agent.add_training_time(self.frame_time.total_time);
     }
@@ -222,11 +238,21 @@ impl MyApp {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Load Agent").clicked() {
-                        println!("Open clicked");
+                        self.is_running = false;
+                        let dialog = FileDialog::open_file(self.opened_agent.clone());
+                        let dialog = dialog.title("Load Agent");
+                        let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
+                        dialog.open();
+                        self.open_file_dialog = Some(dialog);
                         ui.close_menu();
                     }
                     if ui.button("Save Agent").clicked() {
-                        println!("Save clicked");
+                        self.is_running = false;
+                        let dialog = FileDialog::save_file(self.saved_file.clone());
+                        let dialog = dialog.title("Save Agent");
+                        let mut dialog = dialog.default_size(Vec2 { x: 300.0, y: 200.0 });
+                        dialog.open();
+                        self.save_file_dialog = Some(dialog);
                         ui.close_menu();
                     }
                 });
@@ -660,12 +686,13 @@ impl MyApp {
                     self.is_running = false;
                 }
                 if ui.button("Next").clicked() {
-                    if !self.is_running {
-                        self.process_frame();
-                        // Apparently this is not needed, it actually seems
-                        // to produce some unsynching
-                        //ctx.request_repaint();
-                    }
+                    self.is_running_next_frame = true;
+                    //if !self.is_running {
+                    //    self.process_frame();
+                    //    // Apparently this is not needed, it actually seems
+                    //    // to produce some unsynching
+                    //    //ctx.request_repaint();
+                    //}
                 }
             });
             ui.horizontal(|_ui| {});
@@ -696,12 +723,34 @@ impl MyApp {
         }
     }
 
-    fn process_frame(&mut self) {
+    fn file_dialogs(&mut self, ctx: &egui::Context) {
+        // Load Agent
+        if let Some(dialog) = &mut self.open_file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    let path = file.to_str().unwrap();
+                    self.agent = q_learning::load_agent(path);
+                }
+            }
+        }
+
+        // Save Agent
+        if let Some(dialog) = &mut self.save_file_dialog {
+            if dialog.show(ctx).selected() {
+                if let Some(file) = dialog.path() {
+                    let path = file.to_str().unwrap();
+                    q_learning::save_agent(&self.agent, path);
+                }
+            }
+        }
+    }
+
+    fn process_frame(&mut self) -> bool {
         // Run frame
         self.run_frame();
         if self.replay.is_some() {
             self.update_replay(self.frame_time.psx_time.clone());
-            return;
+            return false;
         }
 
         // Get life info
@@ -713,18 +762,19 @@ impl MyApp {
         if self.agent_life_info.life == 0.0 || self.opponent_life_info.life == 0.0 {
             println!("End of combat");
             self.replay = Some(Duration::ZERO);
-            return;
+            return false;
         }
 
         self.reset_controller();
 
         // Feed AI agent
         if self.observation_frequency == 0 {
-            return;
+            return false;
         }
         let start_time = Instant::now();
         self.time_from_last_observation += self.frame_time.total_time;
         let period = Duration::from_secs_f32(1.0 / self.observation_frequency as f32);
+        let mut processed = false;
         if self.time_from_last_observation > period {
             // VISION PIPELINE
             let (mut frame_abstraction, vision_stages) = vision::get_frame_abstraction(
@@ -762,8 +812,10 @@ impl MyApp {
             self.last_vision_stages = vision_stages;
             self.set_controller(action);
             self.time_from_last_observation = Duration::ZERO;
+            processed = true;
         }
         self.frame_time.agent_time = Instant::now() - start_time;
+        processed
     }
 
     fn run_frame(&mut self) {
