@@ -4,6 +4,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use super::vision;
 
@@ -20,9 +21,9 @@ pub struct Agent {
     learning_rate: f32,
     iteration_number: u32,
     states_per_iteration: Vec<[f64; 2]>,
+    training_time: Duration,
 }
 
-#[derive(Clone)]
 struct State {
     frame_abstraction: vision::FrameAbstraction,
     q: [f32; 256],
@@ -54,6 +55,7 @@ impl Agent {
             learning_rate: 0.5,
             iteration_number: 0,
             states_per_iteration: Vec::<[f64; 2]>::new(),
+            training_time: Duration::ZERO,
         }
     }
 
@@ -112,7 +114,7 @@ impl Agent {
             //}
         }
 
-       // Heart of Q-Learning
+        // Heart of Q-Learning
         if let Some(previous_index) = self.previous_index {
             //let reward = (reward + 1.0) / 2.0;
             //print!("Reward: {}\t", reward);
@@ -128,7 +130,8 @@ impl Agent {
 
         let iteration_number = self.iteration_number as f64;
         let number_of_states = self.states.len() as f64;
-        self.states_per_iteration.push([iteration_number, number_of_states]);
+        self.states_per_iteration
+            .push([iteration_number, number_of_states]);
         self.iteration_number += 1;
 
         self.previous_index = Some(current_index);
@@ -157,6 +160,8 @@ impl Agent {
 
         let centroid1 = state.frame_abstraction.char1_centroid;
         let centroid2 = state.frame_abstraction.char2_centroid;
+        let mut best_index = 0;
+        let mut min_mse = 255.0 * 255.0;
         for (i, candidate) in self.states.iter().enumerate() {
             let candidate1 = candidate.frame_abstraction.char1_centroid;
             let candidate2 = candidate.frame_abstraction.char2_centroid;
@@ -171,13 +176,18 @@ impl Agent {
                 let other_frame = &candidate.frame_abstraction.frame;
                 let mse = vision::compute_mse(frame, other_frame);
                 //println!("MSE {}", mse);
-                if mse < max_mse {
-                    return Some(i);
+                if mse < min_mse {
+                    best_index = i;
+                    min_mse = mse;
                 }
             }
         }
 
-        None
+        if min_mse < max_mse {
+            Some(best_index)
+        } else {
+            None
+        }
     }
 
     //fn search_state_in_index_vector(
@@ -251,6 +261,15 @@ impl Agent {
 
     pub fn get_states_per_iteration(&self) -> Vec<[f64; 2]> {
         return self.states_per_iteration.clone();
+    }
+
+    pub fn add_training_time(&mut self, training_time: Duration) {
+        self.training_time += training_time;
+    }
+
+    pub fn get_training_time(&self) -> Duration {
+        // Don't we need clone here?
+        self.training_time
     }
 }
 

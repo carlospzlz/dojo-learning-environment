@@ -212,6 +212,7 @@ impl eframe::App for MyApp {
             self.last_vision_stages = vision_stages;
         }
         self.frame_time.total_time = Instant::now() - start_time;
+        self.agent.add_training_time(self.frame_time.total_time);
     }
 }
 
@@ -532,7 +533,7 @@ impl MyApp {
                 }
                 ui.end_row();
                 ui.label("MSE");
-                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=10000.0).max_decimals(3));
+                ui.add(egui::Slider::new(&mut self.max_mse, 0.0..=60000.0).max_decimals(3));
             });
         });
     }
@@ -581,6 +582,13 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Agent Time (ms):");
                 ui.label(format!("{:.2}", self.frame_time.agent_time.as_millis()));
+                ui.end_row();
+                ui.label("Training Time:");
+                let total_seconds = self.agent.get_training_time().as_secs();
+                let hours = total_seconds / 3600;
+                let minutes = (total_seconds % 3600) / 60;
+                let seconds = total_seconds % 60;
+                ui.label(format!("{:02}:{:02}:{:02}", hours, minutes, seconds));
                 ui.end_row();
             });
             ui.horizontal(|_ui| {});
