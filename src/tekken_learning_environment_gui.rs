@@ -1,5 +1,5 @@
 use egui::plot::{Line, Plot, PlotPoints};
-use egui::{Color32, ColorImage, Vec2};
+use egui::{Align, Color32, ColorImage, Label, Layout, Vec2};
 use egui_file::FileDialog;
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
@@ -178,7 +178,7 @@ impl MyApp {
             char1_dilate_k: 2,
             char2_dilate_k: 2,
             previous_trace_abstraction: RgbImage::default(),
-            trace: 6,
+            trace: 3,
             radius,
             show_states_plot: false,
             opened_agent: None,
@@ -585,11 +585,7 @@ impl MyApp {
     fn right_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("my_right_panel").show(ctx, |ui| {
             ui.horizontal(|_ui| {});
-            //ui.horizontal(|ui| {
-            //    ui.label("Profiling");
-            //    let separator = egui::Separator::default();
-            //    ui.add(separator.horizontal());
-            //});
+            // Profiling
             egui::Grid::new("profiling").show(ui, |ui| {
                 ui.label("FPS:");
                 if self.frame_time.total_time.as_millis() > 0 {
@@ -612,13 +608,6 @@ impl MyApp {
                 ui.end_row();
                 ui.label("Agent Time (ms):");
                 ui.label(format!("{:.2}", self.frame_time.agent_time.as_millis()));
-                ui.end_row();
-                ui.label("Training Time:");
-                let total_seconds = self.agent.get_training_time().as_secs();
-                let hours = total_seconds / 3600;
-                let minutes = (total_seconds % 3600) / 60;
-                let seconds = total_seconds % 60;
-                ui.label(format!("{:02}:{:02}:{:02}", hours, minutes, seconds));
                 ui.end_row();
             });
             ui.horizontal(|_ui| {});
@@ -644,19 +633,25 @@ impl MyApp {
                 ui.add(separator.horizontal());
             });
             egui::Grid::new("ai_agent").show(ui, |ui| {
-                ui.label("Total States:");
+                ui.label("Training Time:");
+                let total_seconds = self.agent.get_training_time().as_secs();
+                let hours = total_seconds / 3600;
+                let minutes = (total_seconds % 3600) / 60;
+                let seconds = total_seconds % 60;
+                ui.label(format!("{:02}:{:02}:{:02}", hours, minutes, seconds));
+                ui.end_row();
+                ui.label("Iteration:");
+                let iteration_number = format!("{}", self.agent.get_iteration_number());
+                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                    ui.label(iteration_number);
+                });
+                ui.end_row();
+                ui.label("States:");
                 let number_of_states = format!("{}", self.agent.get_number_of_states());
-                ui.label(number_of_states);
+                ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+                    ui.label(number_of_states);
+                });
                 ui.end_row();
-                ui.label("Revisited States:");
-                let number_of_revisited_states =
-                    format!("{}", self.agent.get_number_of_revisited_states());
-                ui.label(number_of_revisited_states);
-                ui.end_row();
-                ui.label("Previous Next States:");
-                let previous_next_states =
-                    format!("{}", self.agent.get_number_of_previous_next_states());
-                ui.label(previous_next_states);
             });
             ui.horizontal(|_ui| {});
 
@@ -691,12 +686,6 @@ impl MyApp {
                 }
                 if ui.button("Next").clicked() {
                     self.is_running_next_frame = true;
-                    //if !self.is_running {
-                    //    self.process_frame();
-                    //    // Apparently this is not needed, it actually seems
-                    //    // to produce some unsynching
-                    //    //ctx.request_repaint();
-                    //}
                 }
             });
             ui.horizontal(|_ui| {});

@@ -27,7 +27,7 @@ pub struct Agent {
     number_of_revisited_states: usize,
     discount_factor: f32,
     learning_rate: f32,
-    iteration_number: u32,
+    iteration_number: usize,
     states_per_iteration: Vec<[f64; 2]>,
     training_time: Duration,
 }
@@ -250,6 +250,10 @@ impl Agent {
         RgbImage::default()
     }
 
+    pub fn get_iteration_number(&self) -> usize {
+        self.iteration_number
+    }
+
     pub fn get_number_of_states(&self) -> usize {
         self.states.len()
     }
@@ -303,7 +307,7 @@ fn choose_best_action(state: &State) -> (u8, f32) {
 #[derive(Serialize, Deserialize)]
 struct SerDesAgent {
     number_of_states: usize,
-    iteration_number: u32,
+    iteration_number: usize,
     training_time: Duration,
 }
 
