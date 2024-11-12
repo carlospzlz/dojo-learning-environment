@@ -339,24 +339,35 @@ pub fn save_agent(agent: &Agent, path: &str) {
     let _ = serde_json::to_writer_pretty(agent_file, &ser_des_agent);
 
     // States
-    let frames_path = agent_path.join("frames");
-    let _ = fs::create_dir_all(frames_path.clone());
-    let mut data = fs::File::create(frames_path.join("data.csv")).unwrap();
+    let states_path = agent_path.join("states");
+    let _ = fs::create_dir_all(states_path.clone());
+    let mut data = fs::File::create(states_path.join("data.csv")).unwrap();
     for (i, state) in agent.states.iter().enumerate() {
-        let frame_path = frames_path.join(format!("{:06}.png", i));
+        // Frame
+        let frame_path = states_path.join(format!("{:06}.png", i));
         state
             .frame_abstraction
             .frame
             .save(frame_path.clone())
             .expect("Failed to save frame");
+
+        // Q
+        let q_path = states_path.join(format!("{:06}_q.csv", i));
+        let mut q_file = fs::File::create(q_path.clone()).unwrap();
+        for q in state.q.iter() {
+            writeln!(q_file, "{}", q);
+        }
+
+        // Data
         writeln!(
             data,
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{}",
             frame_path.file_name().unwrap().to_string_lossy(),
             state.frame_abstraction.char1_centroid.0,
             state.frame_abstraction.char1_centroid.1,
             state.frame_abstraction.char2_centroid.0,
             state.frame_abstraction.char2_centroid.1,
+            q_path.file_name().unwrap().to_string_lossy(),
         );
     }
 
@@ -385,13 +396,15 @@ pub fn load_agent(path: &str) -> Agent {
 
     // Read states
     let mut states = Vec::<State>::new();
-    let frames_path = agent_path.join("frames");
-    let mut data = fs::File::open(frames_path.join("data.csv")).unwrap();
+    let states_path = agent_path.join("states");
+    let mut data = fs::File::open(states_path.join("data.csv")).unwrap();
     let reader = BufReader::new(data);
     for line in reader.lines() {
         let line = line.unwrap();
         let tokens: Vec<&str> = line.split(',').collect();
-        let frame_path = frames_path.join(tokens[0].to_string());
+
+        // Frame abstraction
+        let frame_path = states_path.join(tokens[0].to_string());
         let frame = image::open(&frame_path).unwrap().to_rgb8();
         let char1_centroid: (u32, u32) = (
             tokens[1].trim().parse().unwrap(),
@@ -403,7 +416,19 @@ pub fn load_agent(path: &str) -> Agent {
         );
         let frame_abstraction =
             vision::FrameAbstraction::new(frame, char1_centroid, char2_centroid);
-        let state = State::new(frame_abstraction);
+
+        let mut state = State::new(frame_abstraction);
+
+        // Q
+        let q_path = states_path.join(tokens[5].to_string());
+        let q_file = fs::File::open(q_path).unwrap();
+        let reader = BufReader::new(q_file);
+        for (i, line) in reader.lines().enumerate() {
+            let line = line.unwrap();
+            let value: f32 = line.trim().parse().unwrap();
+            state.q[i] = value;
+        }
+
         states.push(state);
     }
 
