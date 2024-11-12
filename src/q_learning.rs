@@ -29,6 +29,7 @@ pub struct Agent {
     learning_rate: f32,
     iteration_number: usize,
     states_per_iteration: Vec<[f64; 2]>,
+    max_q_per_iteration: Vec::<[f64; 2]>,
     training_time: Duration,
 }
 
@@ -64,6 +65,7 @@ impl Agent {
             learning_rate: 0.5,
             iteration_number: 0,
             states_per_iteration: Vec::<[f64; 2]>::new(),
+            max_q_per_iteration: Vec::<[f64; 2]>::new(),
             training_time: Duration::ZERO,
         }
     }
@@ -138,10 +140,13 @@ impl Agent {
             //println!("Next: {}", previous_state.q[act]);
         }
 
+        // For plots
         let iteration_number = self.iteration_number as f64;
         let number_of_states = self.states.len() as f64;
         self.states_per_iteration
             .push([iteration_number, number_of_states]);
+        self.max_q_per_iteration
+            .push([iteration_number, max_q.into()]);
         self.iteration_number += 1;
 
         self.previous_index = Some(current_index);
@@ -277,6 +282,10 @@ impl Agent {
         return self.states_per_iteration.clone();
     }
 
+    pub fn get_max_q_per_iteration(&self) -> Vec<[f64; 2]> {
+        return self.max_q_per_iteration.clone();
+    }
+
     pub fn add_training_time(&mut self, training_time: Duration) {
         self.training_time += training_time;
     }
@@ -377,6 +386,13 @@ pub fn save_agent(agent: &Agent, path: &str) {
     for values in agent.states_per_iteration.iter() {
         writeln!(states_per_iteration_file, "{}, {}", values[0], values[1]);
     }
+
+    // Max Q per iteration
+    let mut max_q_per_iteration_file =
+        fs::File::create(agent_path.join("max_q_per_iteration.csv")).unwrap();
+    for values in agent.max_q_per_iteration.iter() {
+        writeln!(max_q_per_iteration_file, "{}, {}", values[0], values[1]);
+    }
 }
 
 pub fn load_agent(path: &str) -> Agent {
@@ -445,6 +461,19 @@ pub fn load_agent(path: &str) -> Agent {
         states_per_iteration.push([iteration_number, number_of_states]);
     }
 
+    // Max Q per iteration
+    let mut max_q_per_iteration = Vec::<[f64; 2]>::new();
+    let max_q_per_iteration_file =
+        fs::File::open(agent_path.join("max_q_per_iteration.csv")).unwrap();
+    let reader = BufReader::new(max_q_per_iteration_file);
+    for line in reader.lines() {
+        let line = line.unwrap();
+        let tokens: Vec<&str> = line.split(',').collect();
+        let iteration_number: f64 = tokens[0].trim().parse().unwrap();
+        let max_q: f64 = tokens[1].trim().parse().unwrap();
+        max_q_per_iteration.push([iteration_number, max_q]);
+    }
+
     // Build agent
     let mut agent = Agent::new();
     agent.number_of_states = ser_des_agent.number_of_states;
@@ -452,6 +481,7 @@ pub fn load_agent(path: &str) -> Agent {
     agent.training_time = ser_des_agent.training_time;
     agent.states = states;
     agent.states_per_iteration = states_per_iteration;
+    agent.max_q_per_iteration = max_q_per_iteration;
 
     agent
 }

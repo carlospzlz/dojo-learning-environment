@@ -102,6 +102,7 @@ struct MyApp {
     is_running: bool,
     is_running_next_frame: bool,
     last_vision_stages: vision::VisionStages,
+    last_reward: f32,
     vision: Vision,
     split_view: bool,
     character1: Character,
@@ -131,6 +132,7 @@ struct MyApp {
     trace: u8,
     radius: u32,
     show_states_plot: bool,
+    show_q_plot: bool,
     opened_agent: Option<PathBuf>,
     open_file_dialog: Option<FileDialog>,
     saved_file: Option<PathBuf>,
@@ -151,6 +153,7 @@ impl MyApp {
             frame: RgbImage::default(),
             is_running: false,
             is_running_next_frame: false,
+            last_reward: 0.0,
             last_vision_stages: vision::VisionStages::default(),
             vision: Vision::Agent,
             split_view: true,
@@ -181,6 +184,7 @@ impl MyApp {
             trace: 3,
             radius,
             show_states_plot: false,
+            show_q_plot: false,
             opened_agent: None,
             open_file_dialog: None,
             saved_file: None,
@@ -194,6 +198,7 @@ impl eframe::App for MyApp {
         let start_time = Instant::now();
         self.menu_bar(ctx);
         self.show_states_plot(ctx);
+        self.show_q_plot(ctx);
         self.left_panel(ctx);
         self.right_panel(ctx);
         self.bottom_panel(ctx);
@@ -265,6 +270,10 @@ impl MyApp {
                 ui.menu_button("Advanced", |ui| {
                     if ui.button("Open States Plot").clicked() {
                         self.show_states_plot = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("Open Q Plot").clicked() {
+                        self.show_q_plot = true;
                         ui.close_menu();
                     }
                 });
@@ -625,6 +634,8 @@ impl MyApp {
                 ui.label(format!("{:.4}", self.agent_life_info.damage));
                 ui.label(format!("{:.4}", self.opponent_life_info.damage));
                 ui.end_row();
+                ui.label("Reward:");
+                ui.label(format!("{:.4}", self.last_reward));
             });
             ui.horizontal(|_ui| {});
             ui.horizontal(|ui| {
@@ -710,6 +721,24 @@ impl MyApp {
                     let points = PlotPoints::from_iter(states_per_iteration);
                     let line = Line::new(points);
                     Plot::new("states_per_iteration")
+                        .view_aspect(2.0)
+                        .show(ui, |plot_ui| plot_ui.line(line));
+                });
+        }
+    }
+
+    fn show_q_plot(&mut self, ctx: &egui::Context) {
+        if self.show_q_plot {
+            egui::Window::new("Best Q")
+                .open(&mut self.show_q_plot) // Bind visibility to flag
+                .show(ctx, |ui| {
+                    ui.label("Max Q per iteration");
+
+                    // Create plot from states per iteration
+                    let max_q_per_iteration = self.agent.get_max_q_per_iteration();
+                    let points = PlotPoints::from_iter(max_q_per_iteration);
+                    let line = Line::new(points);
+                    Plot::new("max_q_per_iteration")
                         .view_aspect(2.0)
                         .show(ui, |plot_ui| plot_ui.line(line));
                 });
@@ -802,8 +831,9 @@ impl MyApp {
             let action = self
                 .agent
                 .visit_state(frame_abstraction, reward, self.max_mse);
-            self.last_vision_stages = vision_stages;
             self.set_controller(action);
+            self.last_reward = reward;
+            self.last_vision_stages = vision_stages;
             self.time_from_last_observation = Duration::ZERO;
             processed = true;
         }
