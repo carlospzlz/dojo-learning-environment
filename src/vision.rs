@@ -348,7 +348,7 @@ pub fn apply_thresholds(
     //let img = img.to_rgb8();
     let mut img_out = RgbImage::new(img.width(), img.height());
     // Avoid some annoying white dots at the right of the frame
-    let width = cmp::max(img.width() - 1, 0);
+    let width = cmp::max(img.width() as i32 - 1, 0) as u32;
     for x in 0..width {
         for y in 0..img.height() {
             let pixel = img.get_pixel(x, y);
@@ -599,7 +599,9 @@ fn grow_region(
     corner2: &(u32, u32),
 ) -> Character {
     let mut mask_out = GrayImage::new(mask.width(), mask.height());
-    let mut region_corner1 = (mask.width() - 1, mask.height() - 1);
+    let max_width = cmp::max(mask.width() as i32 - 1, 0) as u32;
+    let max_height = cmp::max(mask.height() as i32 - 1, 0) as u32;
+    let mut region_corner1 = (max_width, max_height);
     let mut region_corner2 = (0, 0);
 
     if mask.is_empty() {
