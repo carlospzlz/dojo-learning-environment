@@ -1,5 +1,5 @@
 use egui::plot::{Line, Plot, PlotPoints};
-use egui::{Align, Color32, ColorImage, Label, Layout, Vec2};
+use egui::{Align, Color32, ColorImage, Layout, Vec2};
 use egui_file::FileDialog;
 use image::{DynamicImage, Rgb, RgbImage};
 use log::error;
@@ -57,7 +57,6 @@ enum Character {
     Yoshimitsu,
     Xiaoyu,
     Nina,
-    Random,
 }
 
 #[derive(Debug, PartialEq)]
@@ -157,7 +156,7 @@ impl MyApp {
             last_vision_stages: vision::VisionStages::default(),
             vision: Vision::Agent,
             split_view: true,
-            character1: Character::Yoshimitsu,
+            character1: Character::Xiaoyu,
             character2: Character::Lei,
             current_combat: None,
             agent_life_info: LifeInfo::default(),
@@ -451,7 +450,6 @@ impl MyApp {
                         ui.selectable_value(&mut self.character1, Character::Paul, "Paul");
                         ui.selectable_value(&mut self.character1, Character::Xiaoyu, "Xiaoyu");
                         ui.selectable_value(&mut self.character1, Character::Nina, "Nina");
-                        ui.selectable_value(&mut self.character1, Character::Random, "Random");
                         ui.selectable_value(
                             &mut self.character1,
                             Character::Yoshimitsu,
@@ -471,7 +469,6 @@ impl MyApp {
                         ui.selectable_value(&mut self.character2, Character::Paul, "Paul");
                         ui.selectable_value(&mut self.character2, Character::Xiaoyu, "Xiaoyu");
                         ui.selectable_value(&mut self.character2, Character::Nina, "Nina");
-                        ui.selectable_value(&mut self.character2, Character::Random, "Random");
                         ui.selectable_value(
                             &mut self.character2,
                             Character::Yoshimitsu,
@@ -698,13 +695,6 @@ impl MyApp {
                 if ui.button("Next").clicked() {
                     self.is_running_next_frame = true;
                 }
-            });
-            ui.horizontal(|_ui| {});
-            // Simulation
-            ui.horizontal(|ui| {
-                ui.label("Simulation");
-                let separator = egui::Separator::default();
-                ui.add(separator.horizontal());
             });
         });
     }

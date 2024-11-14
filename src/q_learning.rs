@@ -1,42 +1,35 @@
 use image::{Rgb, RgbImage};
-use log::warn;
+use log::error;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::thread;
 use std::time::Duration;
 
 use super::vision;
 
 pub struct Agent {
     states: Vec<State>,
-    states_index: HashMap<(u32, u32), Vec<usize>>,
     number_of_states: usize,
     radius: u32,
     revisited: bool,
     previous_index: Option<usize>,
     previous_action: Option<u8>,
     previous_q: Option<f32>,
-    number_of_revisited_states: usize,
     discount_factor: f32,
     learning_rate: f32,
     iteration_number: usize,
     states_per_iteration: Vec<[f64; 2]>,
-    max_q_per_iteration: Vec::<[f64; 2]>,
+    max_q_per_iteration: Vec<[f64; 2]>,
     training_time: Duration,
 }
 
 struct State {
     frame_abstraction: vision::FrameAbstraction,
     q: [f32; 256],
-    next_states: HashMap<(u32, u32), Vec<usize>>,
 }
 
 impl State {
@@ -44,7 +37,6 @@ impl State {
         Self {
             frame_abstraction,
             q: [0.0; 256],
-            next_states: HashMap::<(u32, u32), Vec<usize>>::new(),
         }
     }
 }
@@ -54,13 +46,11 @@ impl Agent {
         Self {
             states: Vec::<State>::new(),
             number_of_states: 0,
-            states_index: HashMap::<(u32, u32), Vec<usize>>::new(),
             radius: 30,
             revisited: false,
             previous_index: None,
             previous_action: None,
             previous_q: None,
-            number_of_revisited_states: 0,
             discount_factor: 0.9,
             learning_rate: 0.5,
             iteration_number: 0,
@@ -78,10 +68,6 @@ impl Agent {
     ) -> u8 {
         // We need a way to recognize equivalent states
         // This is one of the most important/challenging parts
-        //if frame_abstraction.is_none() {
-        //    warn!("Frame abstraction not good enough");
-        //    return 0;
-        //}
 
         let state = State::new(frame_abstraction);
 
@@ -97,7 +83,6 @@ impl Agent {
             // Existing state
             let current_state = &self.states[index];
             (current_action, max_q) = choose_best_action(current_state);
-            self.number_of_revisited_states += 1;
             current_index = index;
             self.revisited = true;
         } else {
@@ -109,21 +94,6 @@ impl Agent {
             max_q = 0.0;
             self.number_of_states = self.states.len();
             self.revisited = false;
-            // Index
-            //if let Some(vector) = self.states_index.get_mut(&x_limits) {
-            //    vector.push(current_index);
-            //} else {
-            //    self.states_index.insert(x_limits, vec![current_index]);
-            //}
-            // Add to previous next states index
-            //if let Some(index) = self.previous_index {
-            //    let next_states = &mut self.states[index].next_states;
-            //    if let Some(vector) = next_states.get_mut(&x_limits) {
-            //        vector.push(current_index);
-            //    } else {
-            //        next_states.insert(x_limits, vec![current_index]);
-            //    }
-            //}
         }
 
         // Heart of Q-Learning
@@ -157,22 +127,6 @@ impl Agent {
     }
 
     fn search_state(&self, state: &State, max_mse: f64) -> Option<usize> {
-        // Search first in previous next states
-        //if let Some(index) = self.previous_index {
-        //    let previous_state = &self.states[index];
-        //    if let Some(indexes) = previous_state.next_states.get(&state.x_limits) {
-        //        let result = self.search_state_in_index_vector(state, indexes, max_mse);
-        //        if result.is_some() {
-        //            return result;
-        //        }
-        //    }
-        //}
-        //// Search in global index
-        //if let Some(indexes) = self.states_index.get(&state.x_limits) {
-        //    return self.search_state_in_index_vector(state, indexes, max_mse);
-        //}
-        //None
-
         let centroid1 = state.frame_abstraction.char1_centroid;
         let centroid2 = state.frame_abstraction.char2_centroid;
         let mut best_index = 0;
@@ -205,36 +159,6 @@ impl Agent {
         }
     }
 
-    //fn search_state_in_index_vector(
-    //    &self,
-    //    state: &State,
-    //    index_vector: &Vec<usize>,
-    //    max_mse: f32,
-    //) -> Option<usize> {
-    //    let mut min_mse = 1.0;
-    //    let mut best_index = 0;
-    //    let frame_abstraction = &state.frame_abstraction;
-    //    let x_limits = state.x_limits;
-    //    for index in index_vector {
-    //        let other_frame_abstraction = &self.states[*index].frame_abstraction;
-    //        let other_x_limits = self.states[*index].x_limits;
-    //        let mse = vision::get_mse_in_x_limits(
-    //            &frame_abstraction,
-    //            &other_frame_abstraction,
-    //            x_limits,
-    //            other_x_limits,
-    //        );
-    //        if mse < min_mse {
-    //            min_mse = mse;
-    //            best_index = *index;
-    //        }
-    //    }
-    //    if min_mse < max_mse {
-    //        return Some(best_index);
-    //    }
-    //    None
-    //}
-
     pub fn get_last_state_abstraction(&self) -> RgbImage {
         if let Some(index) = self.previous_index {
             let mut frame = self.states[index].frame_abstraction.frame.clone();
@@ -261,17 +185,6 @@ impl Agent {
 
     pub fn get_number_of_states(&self) -> usize {
         self.states.len()
-    }
-
-    pub fn get_number_of_revisited_states(&self) -> usize {
-        self.number_of_revisited_states
-    }
-
-    pub fn get_number_of_previous_next_states(&self) -> usize {
-        if let Some(index) = self.previous_index {
-            return self.states[index].next_states.len();
-        }
-        0
     }
 
     pub fn set_radius(&mut self, radius: u32) {
@@ -364,11 +277,14 @@ pub fn save_agent(agent: &Agent, path: &str) {
         let q_path = states_path.join(format!("{:06}_q.csv", i));
         let mut q_file = fs::File::create(q_path.clone()).unwrap();
         for q in state.q.iter() {
-            writeln!(q_file, "{}", q);
+            match writeln!(q_file, "{}", q) {
+                Ok(_) => (),
+                Err(e) => error!("Error writing q value: {}", e),
+            }
         }
 
         // Data
-        writeln!(
+        match writeln!(
             data,
             "{},{},{},{},{},{}",
             frame_path.file_name().unwrap().to_string_lossy(),
@@ -377,21 +293,30 @@ pub fn save_agent(agent: &Agent, path: &str) {
             state.frame_abstraction.char2_centroid.0,
             state.frame_abstraction.char2_centroid.1,
             q_path.file_name().unwrap().to_string_lossy(),
-        );
+        ) {
+            Ok(_) => (),
+            Err(e) => error!("Error writing state data: {}", e),
+        }
     }
 
     // States per iteration
     let mut states_per_iteration_file =
         fs::File::create(agent_path.join("states_per_iteration.csv")).unwrap();
     for values in agent.states_per_iteration.iter() {
-        writeln!(states_per_iteration_file, "{}, {}", values[0], values[1]);
+        match writeln!(states_per_iteration_file, "{}, {}", values[0], values[1]) {
+            Ok(_) => (),
+            Err(e) => error!("Error writing states per iteration: {}", e),
+        }
     }
 
     // Max Q per iteration
     let mut max_q_per_iteration_file =
         fs::File::create(agent_path.join("max_q_per_iteration.csv")).unwrap();
     for values in agent.max_q_per_iteration.iter() {
-        writeln!(max_q_per_iteration_file, "{}, {}", values[0], values[1]);
+        match writeln!(max_q_per_iteration_file, "{}, {}", values[0], values[1]) {
+            Ok(_) => (),
+            Err(e) => error!("Error writing max Q per iteration: {}", e),
+        }
     }
 }
 
@@ -413,7 +338,7 @@ pub fn load_agent(path: &str) -> Agent {
     // Read states
     let mut states = Vec::<State>::new();
     let states_path = agent_path.join("states");
-    let mut data = fs::File::open(states_path.join("data.csv")).unwrap();
+    let data = fs::File::open(states_path.join("data.csv")).unwrap();
     let reader = BufReader::new(data);
     for line in reader.lines() {
         let line = line.unwrap();
