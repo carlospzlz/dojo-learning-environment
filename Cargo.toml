@@ -1,14 +1,14 @@
 [package]
-name = "tekken_learning_environment"
+name = "dojo_learning_environment"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "tekken_learning_environment_gui"
-path = "src/tekken_learning_environment_gui.rs"
+name = "dojo-learning-environment-gui"
+path = "src/dojo_learning_environment_gui.rs"
 
 [[bin]]
-name = "psx_gui"
+name = "psx-gui"
 path = "src/psx_gui.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

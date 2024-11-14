@@ -1,4 +1,4 @@
-// Tekken Learning Environment
+// Dojo Learning Environment
 // Copyright (C) 2023-2024 Carlos Perez-Lopez
 //
 // This project is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@ fn main() -> Result<(), eframe::Error> {
         ..Default::default()
     };
     eframe::run_native(
-        "Tekken Learning Environment",
+        "Dojo Learning Environment",
         options,
         Box::new(move |cc| {
             let bios = args[1].clone();

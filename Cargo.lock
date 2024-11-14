@@ -798,6 +798,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "dojo_learning_environment"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "byteorder",
+ "eframe",
+ "egui",
+ "egui_file",
+ "egui_glow",
+ "env_logger",
+ "image",
+ "imageproc",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "serde_arrays",
+ "serde_json",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2797,26 +2817,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.87",
-]
-
-[[package]]
-name = "tekken_learning_environment"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "byteorder",
- "eframe",
- "egui",
- "egui_file",
- "egui_glow",
- "env_logger",
- "image",
- "imageproc",
- "log",
- "rand 0.8.5",
- "serde",
- "serde_arrays",
- "serde_json",
 ]
 
 [[package]]

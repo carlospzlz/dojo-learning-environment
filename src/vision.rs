@@ -1,4 +1,4 @@
-// Tekken Learning Environment
+// Dojo Learning Environment
 // Copyright (C) 2023-2024 Carlos Perez-Lopez
 //
 // This project is free software: you can redistribute it and/or modify
