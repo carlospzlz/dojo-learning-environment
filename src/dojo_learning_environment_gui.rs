@@ -592,18 +592,26 @@ impl MyApp {
         });
     }
 
-    fn load_current_combat(&mut self) {
+    fn load_current_combat(&mut self) -> bool {
         let name1 = format!("{:?}", self.character1).to_lowercase();
         let name2 = format!("{:?}", self.character2).to_lowercase();
         let filepath = format!("{}/{}_vs_{}.bin", STATES_DIR, name1, name2);
         println!("Loading {} ...", filepath);
-        let mut bytes = Vec::new();
-        let mut file = File::open(&filepath).unwrap();
-        let _ = file.read_to_end(&mut bytes).unwrap();
-        // 'bios' and 'game' filepaths will come from the state
-        // TODO: Set bios and game
-        self.system = bincode::deserialize(&bytes).unwrap();
-        self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
+        match File::open(&filepath) {
+            Ok(mut file) => {
+                let mut bytes = Vec::new();
+                let _ = file.read_to_end(&mut bytes).unwrap();
+                // 'bios' and 'game' filepaths will come from the state
+                // TODO: Set bios and game
+                self.system = bincode::deserialize(&bytes).unwrap();
+                self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
+                true
+            }
+            Err(error) => {
+                eprintln!("State not found: {} ({})", filepath, error);
+                false
+            }
+        }
     }
 
     fn right_panel(&mut self, ctx: &egui::Context) {
@@ -703,9 +711,10 @@ impl MyApp {
                 // Emulator Controls
                 if ui.button("Start").clicked() {
                     if self.current_combat.is_none() {
-                        self.load_current_combat();
+                        self.is_running = self.load_current_combat();
+                    } else {
+                        self.is_running = true;
                     }
-                    self.is_running = true;
                 }
                 if ui.button("Stop").clicked() {
                     self.is_running = false;
