@@ -164,7 +164,7 @@ impl MyApp {
             opponent_life_info: LifeInfo::default(),
             replay: None,
             agent,
-            observation_frequency: 10,
+            observation_frequency: 15,
             time_from_last_observation: Duration::from_secs(1),
             frame_time: FrameTime::default(),
             learning_rate: 0.5,
@@ -828,6 +828,7 @@ impl MyApp {
 
             // REWARD
             let reward = self.opponent_life_info.damage - self.agent_life_info.damage;
+            let reward = if reward < 0.0 { reward * 4.0 } else { reward };
             let action = self
                 .agent
                 .visit_state(frame_abstraction, reward, self.max_mse);

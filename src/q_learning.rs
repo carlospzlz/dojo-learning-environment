@@ -297,7 +297,7 @@ impl Agent {
 }
 
 fn choose_best_action(state: &State) -> (u8, f32) {
-    let mut max_q = 0.0;
+    let mut max_q = -1.0;
     let mut best_action = None;
     for (action, &q) in state.q.iter().enumerate() {
         if q > max_q {
