@@ -322,16 +322,6 @@ pub fn get_frame_abstraction(
         segmented_frame,
     );
 
-    // Discard bad abstractions
-    //if get_detected_amount(&mask) < 0.02 {
-    //    println!("Discarded");
-    //    return (None, vision_stages);
-    //}
-
-    //Down-size, so compute time doesn't explode
-    //let frame_abstraction = DynamicImage::ImageRgb8(frame_abstraction);
-    //let frame_abstraction =
-    //    frame_abstraction.resize_exact(100, 100, image::imageops::FilterType::Nearest);
     (frame_abstraction, vision_stages)
 }
 
@@ -450,55 +440,6 @@ fn find_centroids(
 
     //In right half
     let centroid2 = find_centroid(img, (half_x, corner1.1), corner2);
-
-    //let mut centroid1 = (0, 0);
-    //let mut max_count = 0;
-    //for x in corner1.0..half_x {
-    //    let mut count = 0;
-    //    for y in corner1.1..corner2.1 {
-    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-    //    }
-    //    if count > max_count {
-    //        centroid1.0 = x;
-    //        max_count = count;
-    //    }
-    //}
-    //let mut max_count = 0;
-    //for y in corner1.1..corner2.1 {
-    //    let mut count = 0;
-    //    for x in corner1.0..half_x {
-    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-    //    }
-    //    if count > max_count {
-    //        centroid1.1 = y;
-    //        max_count = count;
-    //    }
-    //}
-
-    //// Centroid2
-    //let mut centroid2 = (0, 0);
-    //let mut max_count = 0;
-    //for x in half_x..corner2.0 {
-    //    let mut count = 0;
-    //    for y in corner1.1..corner2.1 {
-    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-    //    }
-    //    if count > max_count {
-    //        centroid2.0 = x;
-    //        max_count = count;
-    //    }
-    //}
-    //let mut max_count = 0;
-    //for y in corner1.1..corner2.1 {
-    //    let mut count = 0;
-    //    for x in half_x..corner2.0 {
-    //        count += if img.get_pixel(x, y)[0] != 0 { 1 } else { 0 };
-    //    }
-    //    if count > max_count {
-    //        centroid2.1 = y;
-    //        max_count = count;
-    //    }
-    //}
 
     (centroid1, centroid2)
 }
@@ -945,50 +886,6 @@ fn draw_square(img: &mut RgbImage, centroid: (u32, u32), radius: u32) {
         img.put_pixel(corner1.0, y, Rgb([0, 255, 0]));
         img.put_pixel(corner2.0, y, Rgb([0, 255, 0]));
     }
-
-    //// Top edge
-    //let min_y = (centroid.1 as i32 - radius);
-    //if min_y >= 0 {
-    //    for dx in -radius..radius {
-    //        let x = centroid.0 as i32 + dx;
-    //        if x >= 0 && x < img.width() as i32 {
-    //            img.put_pixel(x as u32, min_y as u32, Rgb([0, 255, 0]));
-    //        }
-    //    }
-    //}
-
-    //// Bottom edge
-    //let max_y = (centroid.1 as i32 + radius);
-    //if max_y < img.height() {
-    //    for dx in -radius..radius {
-    //        let x = centroid.0 as i32 + dx;
-    //        if x >= 0 && x < img.width() as i32 {
-    //            img.put_pixel(x as u32, max_y as u32, Rgb([0, 255, 0]));
-    //        }
-    //    }
-    //}
-
-    //// Left edge
-    //let min_x = (centroid.0 as i32 - radius);
-    //if min_x >= 0 {
-    //    for dy in -radius..radius {
-    //        let y = centroid.1 as i32 + dy;
-    //        if y >= 0 && y < img.height() as i32 {
-    //            img.put_pixel(min_x as u32, y as u32, Rgb([0, 255, 0]));
-    //        }
-    //    }
-    //}
-
-    //// Right edge
-    //let max_x = (centroid.0 as i32 + radius);
-    //if max_x < img.widht() {
-    //    for dy in -radius..radius {
-    //        let y = centroid.1 as i32 + dy;
-    //        if y >= 0 && x < img.height() as i32 {
-    //            img.put_pixel(min_x as u32, y as u32, Rgb([0, 255, 0]));
-    //        }
-    //    }
-    //}
 }
 
 pub fn compute_mse(img1: &RgbImage, img2: &RgbImage) -> f64 {
