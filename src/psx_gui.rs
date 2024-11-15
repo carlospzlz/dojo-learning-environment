@@ -21,10 +21,11 @@ use egui_file::FileDialog;
 use image::{Rgb, RgbImage};
 use log::error;
 use std::env;
+use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 // Emu system
 mod psx;
@@ -66,7 +67,14 @@ struct MyApp {
 
 impl MyApp {
     fn new(_cc: &eframe::CreationContext<'_>, bios: String, game: String) -> Self {
-        let mut system = System::new(&bios, &game);
+        // Make game path absolute, so state can be loaded from anywhere
+        let game_path = match fs::canonicalize(Path::new(&game)) {
+            Ok(game_path) => game_path,
+            Err(e) => {
+                panic!("Error resolving to absolute path: {}: {}", game, e);
+            }
+        };
+        let mut system = System::new(&bios, &game_path.to_string_lossy());
         system.reset();
         Self {
             bios,
