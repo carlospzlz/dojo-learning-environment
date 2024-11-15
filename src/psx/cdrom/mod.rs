@@ -702,7 +702,10 @@ impl Cdrom {
 
                 self.data_busy = true;
 
-                let mut game_file = File::open(&self.game_filepath).unwrap();
+                let mut game_file = match File::open(&self.game_filepath) {
+                    Ok(file) => file,
+                    Err(e) => panic!("Error opening game: {}: {}", self.game_filepath, e),
+                };
                 let cursor = self.get_seek_location();
                 game_file.seek(SeekFrom::Start(cursor)).unwrap();
 

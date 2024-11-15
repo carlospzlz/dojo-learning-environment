@@ -1,4 +1,4 @@
-use std::fs::{File, OpenOptions};
+use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::prelude::{Read, Write};
 use std::path::Path;
 
@@ -70,6 +70,17 @@ impl MemoryCard {
     }
 
     fn create_file(path: &Path) {
+        // Create parent directories if they don't exist
+        if let Some(parent) = Path::new(path).parent() {
+            match create_dir_all(parent) {
+                Ok(_) => (),
+                Err(e) => panic!(
+                    "Failed to create parent directories: {}: {}",
+                    path.display(),
+                    e
+                ),
+            }
+        }
         let f = File::create(path).unwrap();
         f.set_len(MEMORY_CARD_SIZE as u64).unwrap();
     }
