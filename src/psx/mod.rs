@@ -39,6 +39,7 @@ pub struct System {
 }
 
 impl System {
+    #![allow(dead_code)]
     pub fn new(bios_filepath: &str, game_filepath: &str) -> System {
         System {
             running: true,

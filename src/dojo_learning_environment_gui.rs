@@ -20,9 +20,7 @@ use egui::plot::{Line, Plot, PlotPoints};
 use egui::{Align, Color32, ColorImage, Layout, Vec2};
 use egui_file::FileDialog;
 use image::{DynamicImage, Rgb, RgbImage};
-use log::error;
 use std::collections::HashMap;
-use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
@@ -44,11 +42,6 @@ const REPLAY_DURATION: Duration = Duration::from_secs(2);
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`)
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        error!("Usage: {} <bios> <game>", args[0]);
-        return Ok(());
-    }
     let options = eframe::NativeOptions {
         initial_window_size: Some(egui::vec2(750.0, 550.0)),
         ..Default::default()
@@ -56,11 +49,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Dojo Learning Environment",
         options,
-        Box::new(move |cc| {
-            let bios = args[1].clone();
-            let game = args[2].clone();
-            Box::new(MyApp::new(cc, bios, game))
-        }),
+        Box::new(move |cc| Box::new(MyApp::new(cc))),
     )
 }
 
@@ -110,11 +99,7 @@ impl Default for FrameTime {
 }
 
 struct MyApp {
-    #[allow(dead_code)]
-    bios: String,
-    #[allow(dead_code)]
-    game: String,
-    system: System,
+    system: Option<System>,
     frame: RgbImage,
     is_running: bool,
     is_running_next_frame: bool,
@@ -124,7 +109,6 @@ struct MyApp {
     split_view: bool,
     character1: Character,
     character2: Character,
-    current_combat: Option<[Character; 2]>,
     agent_life_info: LifeInfo,
     opponent_life_info: LifeInfo,
     replay: Option<std::time::Duration>,
@@ -157,16 +141,12 @@ struct MyApp {
 }
 
 impl MyApp {
-    fn new(_cc: &eframe::CreationContext<'_>, bios: String, game: String) -> Self {
-        let mut system = System::new(&bios, &game);
-        system.reset();
+    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let radius = 30;
         let mut agent = Agent::new();
         agent.set_radius(radius);
         Self {
-            bios,
-            game,
-            system,
+            system: None,
             frame: RgbImage::default(),
             is_running: false,
             is_running_next_frame: false,
@@ -176,7 +156,6 @@ impl MyApp {
             split_view: true,
             character1: Character::Xiaoyu,
             character2: Character::Lei,
-            current_combat: None,
             agent_life_info: LifeInfo::default(),
             opponent_life_info: LifeInfo::default(),
             replay: None,
@@ -360,87 +339,123 @@ impl MyApp {
                 // Virtual Controller
                 ui.add_space(available_width / 2.0 - controller_half_size + 14.0);
                 let mut up_button = egui::Button::new("⏶");
-                if self.system.get_controller().button_dpad_up {
-                    up_button = up_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_dpad_up {
+                        up_button = up_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 if ui.add(up_button).clicked() {
-                    self.system.get_controller().button_dpad_up = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_dpad_up = true;
+                    }
                 }
                 ui.add_space(30.0);
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(64, 226, 160));
                 let mut triangle_button = egui::Button::new("∆");
-                if self.system.get_controller().button_triangle {
-                    triangle_button = triangle_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_triangle {
+                        triangle_button = triangle_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 if ui.add(triangle_button).clicked() {
-                    self.system.get_controller().button_triangle = true;
+                    if let Some(system) = &mut self.system.as_mut() {
+                        system.get_controller().button_triangle = true;
+                    }
                 }
             });
             ui.horizontal(|ui| {
                 ui.add_space(available_width / 2.0 - controller_half_size);
                 // Left Arrow
                 let mut left_button = egui::Button::new("⏴");
-                if self.system.get_controller().button_dpad_left {
-                    left_button = left_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_dpad_left {
+                        left_button = left_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 if ui.add(left_button).clicked() {
-                    self.system.get_controller().button_dpad_left = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_dpad_left = true;
+                    }
                 }
                 // Right Arrow
                 let mut right_button = egui::Button::new("⏵");
-                if self.system.get_controller().button_dpad_right {
-                    right_button = right_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_dpad_right {
+                        right_button = right_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 if ui.add(right_button).clicked() {
-                    self.system.get_controller().button_dpad_right = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_dpad_right = true;
+                    }
                 }
                 // Square Button
                 let mut square_button = egui::Button::new("◻");
-                if self.system.get_controller().button_square {
-                    square_button = square_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_square {
+                        square_button = square_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 105, 248));
                 if ui.add(square_button).clicked() {
-                    self.system.get_controller().button_square = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_square = true;
+                    }
                 }
                 // Circle Button
                 let mut circle_button = egui::Button::new("○");
-                if self.system.get_controller().button_circle {
-                    circle_button = circle_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_circle {
+                        circle_button = circle_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(255, 102, 102));
                 if ui.add(circle_button).clicked() {
-                    self.system.get_controller().button_circle = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_circle = true;
+                    }
                 }
             });
             ui.horizontal(|ui| {
                 // Down Arrow
                 ui.add_space(available_width / 2.0 - controller_half_size + 14.0);
                 let mut down_button = egui::Button::new("⏷");
-                if self.system.get_controller().button_dpad_down {
-                    down_button = down_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_dpad_down {
+                        down_button = down_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 if ui.add(down_button).clicked() {
-                    self.system.get_controller().button_dpad_down = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_dpad_down = true;
+                    }
                 }
                 ui.add_space(29.0);
                 // Cross Button
                 let mut cross_button = egui::Button::new("🗙");
-                if self.system.get_controller().button_cross {
-                    cross_button = cross_button.fill(Color32::LIGHT_GREEN);
+                if let Some(system) = self.system.as_mut() {
+                    if system.get_controller().button_cross {
+                        cross_button = cross_button.fill(Color32::LIGHT_GREEN);
+                    }
                 }
                 ui.style_mut().visuals.override_text_color = Some(Color32::from_rgb(124, 178, 232));
                 if ui.add(cross_button).clicked() {
-                    self.system.get_controller().button_cross = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_cross = true;
+                    }
                 }
             });
             ui.horizontal(|ui| {
                 ui.add_space(available_width / 2.0 - controller_half_size);
                 if ui.button("SELECT").clicked() {
-                    self.system.get_controller().button_select = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_select = true;
+                    }
                 }
                 if ui.button("START").clicked() {
-                    self.system.get_controller().button_start = true;
+                    if let Some(system) = self.system.as_mut() {
+                        system.get_controller().button_start = true;
+                    }
                 }
             });
         });
@@ -449,12 +464,6 @@ impl MyApp {
     fn left_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("my_left_panel").show(ctx, |ui| {
             ui.horizontal(|_ui| {});
-            // General
-            //ui.horizontal(|ui| {
-            //    ui.label("General");
-            //    let separator = egui::Separator::default();
-            //    ui.add(separator.horizontal());
-            //});
             egui::Grid::new("general_options").show(ui, |ui| {
                 ui.label("AI agent:");
                 egui::ComboBox::from_id_source("agent_character")
@@ -601,10 +610,9 @@ impl MyApp {
             Ok(mut file) => {
                 let mut bytes = Vec::new();
                 let _ = file.read_to_end(&mut bytes).unwrap();
-                // 'bios' and 'game' filepaths will come from the state
-                // TODO: Set bios and game
-                self.system = bincode::deserialize(&bytes).unwrap();
-                self.current_combat = Some([self.character1.clone(), self.character2.clone()]);
+                // Careful, 'bios' and 'game' filepaths will be embedded
+                // in the psx state, files must be available.
+                self.system = Some(bincode::deserialize(&bytes).unwrap());
                 true
             }
             Err(error) => {
@@ -710,7 +718,7 @@ impl MyApp {
             ui.horizontal(|ui| {
                 // Emulator Controls
                 if ui.button("Start").clicked() {
-                    if self.current_combat.is_none() {
+                    if self.system.is_none() {
                         self.is_running = self.load_current_combat();
                     } else {
                         self.is_running = true;
@@ -860,13 +868,17 @@ impl MyApp {
     }
 
     fn run_frame(&mut self) {
+        let system = self
+            .system
+            .as_mut()
+            .expect("Trying to run a frame with no system!");
         let start_time = Instant::now();
-        self.system.run_frame();
+        system.run_frame();
         self.frame_time.psx_time = Instant::now() - start_time;
         // Get frame buffer
-        let (width, height) = self.system.get_display_size();
+        let (width, height) = system.get_display_size();
         let mut framebuffer = vec![0; width as usize * height as usize * 3].into_boxed_slice();
-        self.system.get_framebuffer(&mut framebuffer, false);
+        system.get_framebuffer(&mut framebuffer, false);
         self.frame = convert_framebuffer_to_rgb_image(&framebuffer, width, height);
     }
 
@@ -882,27 +894,31 @@ impl MyApp {
     }
 
     fn reset_controller(&mut self) {
-        self.system.get_controller().button_dpad_up = false;
-        self.system.get_controller().button_dpad_down = false;
-        self.system.get_controller().button_dpad_left = false;
-        self.system.get_controller().button_dpad_right = false;
-        self.system.get_controller().button_triangle = false;
-        self.system.get_controller().button_square = false;
-        self.system.get_controller().button_circle = false;
-        self.system.get_controller().button_cross = false;
-        self.system.get_controller().button_start = false;
-        self.system.get_controller().button_select = false;
+        if let Some(system) = self.system.as_mut() {
+            system.get_controller().button_dpad_up = false;
+            system.get_controller().button_dpad_down = false;
+            system.get_controller().button_dpad_left = false;
+            system.get_controller().button_dpad_right = false;
+            system.get_controller().button_triangle = false;
+            system.get_controller().button_square = false;
+            system.get_controller().button_circle = false;
+            system.get_controller().button_cross = false;
+            system.get_controller().button_start = false;
+            system.get_controller().button_select = false;
+        }
     }
 
     fn set_controller(&mut self, action: u8) {
-        self.system.get_controller().button_dpad_up = (action & 1 << 0) != 0;
-        self.system.get_controller().button_dpad_down = (action & 1 << 1) != 0;
-        self.system.get_controller().button_dpad_left = (action & 1 << 2) != 0;
-        self.system.get_controller().button_dpad_right = (action & 1 << 3) != 0;
-        self.system.get_controller().button_triangle = (action & 1 << 4) != 0;
-        self.system.get_controller().button_square = (action & 1 << 5) != 0;
-        self.system.get_controller().button_circle = (action & 1 << 6) != 0;
-        self.system.get_controller().button_cross = (action & 1 << 7) != 0;
+        if let Some(system) = self.system.as_mut() {
+            system.get_controller().button_dpad_up = (action & 1 << 0) != 0;
+            system.get_controller().button_dpad_down = (action & 1 << 1) != 0;
+            system.get_controller().button_dpad_left = (action & 1 << 2) != 0;
+            system.get_controller().button_dpad_right = (action & 1 << 3) != 0;
+            system.get_controller().button_triangle = (action & 1 << 4) != 0;
+            system.get_controller().button_square = (action & 1 << 5) != 0;
+            system.get_controller().button_circle = (action & 1 << 6) != 0;
+            system.get_controller().button_cross = (action & 1 << 7) != 0;
+        }
     }
 }
 
