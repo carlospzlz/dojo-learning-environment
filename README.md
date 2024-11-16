@@ -10,23 +10,22 @@ the game, and a comprehensive GUI application that enables interaction with the
 system and real-time parameter configuration. This setup creates a versatile
 and dynamic environment for exploring AI agents.
 
-![](resources/dojo_learning_environment_cover.png)
+[![](resources/dojo_learning_environment_cover.png)](https://youtu.be/dN3Ic_XxZ3Y)
 
 Another motivation for embarking on this project was to learn and gain
-experience with Rust.
+experience with Rust :crab:
 
 # Vision Pipeline
 
 <p align="middle">
-    <img src="resources/vision_pipeline_contrast.png" width="320" height="256" />
-    <img src="resources/vision_pipeline_mask.png" width="320" height="256" />
-    <img src="resources/vision_pipeline_masked.png" width="320" height="256" />
+    <img src="resources/vision_pipeline_contrast.png" width="270" height="200" />
+    <img src="resources/vision_pipeline_mask.png" width="270" height="200" />
+    <img src="resources/vision_pipeline_masked.png" width="270" height="200" />
 </p>
-
 <p align="middle">
-    <img src="resources/vision_pipeline_centroids_hud.png" width="320" height="256" />
-    <img src="resources/vision_pipeline_chars.png" width="320" height="256" />
-    <img src="resources/vision_pipeline_segmented.png" width="320" height="256" />
+    <img src="resources/vision_pipeline_centroids_hud.png" width="270" height="200" />
+    <img src="resources/vision_pipeline_chars.png" width="270" height="200" />
+    <img src="resources/vision_pipeline_segmented.png" width="270" height="200" />
 </p>
 
 # AI Agent: Q Learning
@@ -36,6 +35,8 @@ experience with Rust.
 ## Generate game states
 
 ## Run Dojo Learning Environment GUI
+
+## Save/Load agents
 
 # Challenges
 
