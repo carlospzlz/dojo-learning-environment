@@ -10,7 +10,7 @@ the game, and a comprehensive GUI application that enables interaction with the
 system and real-time parameter configuration. This setup creates a versatile
 and dynamic environment for exploring AI agents.
 
-![](resources/dojo_learning_environment_cover.jpg)
+![](resources/dojo_learning_environment_cover.png)
 
 Another motivation for embarking on this project was to learn and gain
 experience with Rust.
@@ -24,7 +24,7 @@ experience with Rust.
 </p>
 
 <p align="middle">
-    <img src="resources/vision_pipeline_centroids.png" width="320" height="256" />
+    <img src="resources/vision_pipeline_centroids_hud.png" width="320" height="256" />
     <img src="resources/vision_pipeline_chars.png" width="320" height="256" />
     <img src="resources/vision_pipeline_segmented.png" width="320" height="256" />
 </p>
