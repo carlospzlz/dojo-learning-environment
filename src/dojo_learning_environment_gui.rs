@@ -142,7 +142,7 @@ struct MyApp {
 
 impl MyApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let radius = 30;
+        let radius = 20;
         let mut agent = Agent::new();
         agent.set_radius(radius);
         Self {
