@@ -137,6 +137,10 @@ critical to ensuring the number of unique states eventually converged to a
 reasonable level. Overcoming this challenge led to significant improvements in
 the vision pipeline.
 
+Note that certain characters and scenarios can significantly increase
+segmentation difficulty, and fine-tuning the vision pipeline parameters would
+be necessary to achieve optimal results.
+
 # Future work
 
 Research suggests that for complex vision-based problems like this, a more
