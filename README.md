@@ -46,11 +46,11 @@ $$
 Q(s, a) \leftarrow Q(s, a) + \alpha \left[ r + \gamma \max_{a'} Q(s', a') - Q(s, a) \right]
 $$
 
-- Q(s, a): The Q-value, representing the expected cumulative reward for
+- $$Q(s, a)$$: The Q-value, representing the expected cumulative reward for
 taking action **a** in state **s**
 - $$\alpha$$: The learning rate, determining how much new information
 overrides old information. This parameter is configurable via GUI
-- r: The immediate reward received after taking action **a** in state
+- $$r$$: The immediate reward received after taking action **a** in state
 **s**. This is extracted from the life bars
 - $$\gamma$$: The discount factor, which prioritizes immediate rewards over
 future rewards. Parameter configurable via GUI
