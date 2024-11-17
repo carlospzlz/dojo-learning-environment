@@ -46,15 +46,15 @@ $$
 Q(s, a) \leftarrow Q(s, a) + \alpha \left[ r + \gamma \max_{a'} Q(s', a') - Q(s, a) \right]
 $$
 
-- **Q(s, a):** The Q-value, representing the expected cumulative reward for
+- Q(s, a): The Q-value, representing the expected cumulative reward for
 taking action **a** in state **s**
-- **\alpha:** The learning rate, determining how much new information
-overrides old information. This parameter configurable via GUI
-- **r:** The immediate reward received after taking action **a** in state
+- $$\alpha$$: The learning rate, determining how much new information
+overrides old information. This parameter is configurable via GUI
+- r: The immediate reward received after taking action **a** in state
 **s**. This is extracted from the life bars
-- **\gamma:** The discount factor, which prioritizes immediate rewards over
+- $$\gamma$$: The discount factor, which prioritizes immediate rewards over
 future rewards. Parameter configurable via GUI
-- **\max_{a'} Q(s', a'):** The maximum Q-value for the next state **s'**,
+- $$\max_{a'} Q(s', a')$$: The maximum Q-value for the next state **s'**,
 representing the best possible action from that state
 
 The GUI application provides advanced functionality, including a plot of the
@@ -82,7 +82,7 @@ However, a convenient tool called **psx-gui** is included. This application runs
 the emulator with a graphical user interface, allowing you to easily save (and
 load) emulator states.
 
-To launch the psx-gui application, use the following command:
+To launch the `psx-gui` application, use the following command:
 
 ```
 cargo run --release --bin psx-gui <bios-path> <rom-path>
@@ -106,7 +106,7 @@ the training process.
 cargo run --release --bin dojo-learning-environment-gui
 ```
 
-Using the GUI, you can start and stop training or step through the process
+Using the GUI, you can `Start` and `Stop` training or step through the process
 incrementally using the `Next` button.
 
 Take some time to explore the GUI and discover its full functionality. One
